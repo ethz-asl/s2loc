@@ -1,0 +1,3 @@
+[submodule "lib/s2cnn"]
+	path = lib/s2cnn
+	url = git@github.com:jonas-koehler/s2cnn.git
