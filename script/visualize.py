@@ -24,7 +24,7 @@ class Visualize:
         pcd.points = o3d.utility.Vector3dVector(cart_sphere[:, 0:3])
         colors = self.__mapIntensityToRGB(sphere.intensity)
         pcd.colors = o3d.utility.Vector3dVector(colors[:,0:3])
-        
+
         if jupyter:
             self.__visualizeJupyter(pcd)
         else:

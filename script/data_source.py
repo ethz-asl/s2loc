@@ -10,6 +10,7 @@ class DataSource:
         self.anchors = None
         self.positives = None
         self.negatives = None
+        self.ds_size = 0
 
     def loadAll(self):
         path_anchor = self.datasource + "/training_anchor/"
@@ -27,6 +28,7 @@ class DataSource:
         print("\tAnchors: \t", len(self.anchors))
         print("\tPositives: \t", len(self.positives))
         print("\tNegatives: \t", len(self.negatives))
+        self.ds_size = len(self.anchors)
 
     def loadDataset(self, path_to_dataset):
         idx = 0
@@ -44,6 +46,8 @@ class DataSource:
             idx = idx + 1
         return dataset
 
+    def size(self):
+        return self.ds_size
 
 if __name__ == "__main__":
     ds = DataSource("/tmp/training")

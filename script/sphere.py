@@ -22,7 +22,7 @@ class Sphere:
 
         kNearestNeighbors = 1
         n_sample_points = len(cart_grid)
-        features = np.empty([2, n_sample_points])
+        features = np.zeros([2, n_sample_points])
         for i in range(n_sample_points):
             [k, idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[i,:], kNearestNeighbors)
 
