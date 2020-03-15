@@ -1,4 +1,5 @@
 from data_source import DataSource
+from dh_grid import DHGrid
 import numpy as np
 import open3d as o3d
 
@@ -19,7 +20,6 @@ class Sphere:
         pcd.points = o3d.utility.Vector3dVector(cart_sphere[:, 0:3])
         pcd_tree = o3d.geometry.KDTreeFlann(pcd)
 
-
         kNearestNeighbors = 1
         n_sample_points = len(cart_grid)
         features = np.empty([2, n_sample_points])
@@ -28,8 +28,8 @@ class Sphere:
 
             for nn in range(kNearestNeighbors):
                 cur_idx = idx[nn]
-                features[0, cur_idx] = self.ranges[cur_idx]
-                features[1, cur_idx] = self.intensity[cur_idx]
+                features[0, i] = self.ranges[cur_idx]
+                features[1, i] = self.intensity[cur_idx]
 
         return features
 
@@ -44,11 +44,11 @@ class Sphere:
         with np.errstate(divide='ignore', invalid='ignore'):
             projected[:,0] = np.arccos(cloud[:,2] / dist)
             projected[:,1] = np.mod(np.arctan2(cloud[:,1], cloud[:,0]) + 2*np.pi, 2*np.pi)
-            ranges[:,1] = dist
+            ranges[:,0] = dist
         return projected, ranges
 
     def __convertSphericalToEuclidean(self, spherical):
-        cart_sphere = np.empty(spherical.shape)
+        cart_sphere = np.empty([len(spherical), 3])
         cart_sphere[:,0] = np.multiply(np.sin(spherical[:,0]), np.cos(spherical[:,1]))
         cart_sphere[:,1] = np.multiply(np.sin(spherical[:,0]), np.sin(spherical[:,1]))
         cart_sphere[:,2] = np.cos(spherical[:,0])
@@ -61,3 +61,5 @@ if __name__ == "__main__":
     ds.loadAll()
 
     sph = Sphere(ds.anchors[0])
+    grid = DHGrid.createGrid(50)
+    features = sph.sampleUsingGrid(grid)
