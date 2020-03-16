@@ -3,7 +3,7 @@ import numpy as np
 class DHGrid:
     @staticmethod
     def createGrid(bw):
-        n_grid = 2 * bw - 1
+        n_grid = 2 * bw
         k = 0;
         points = np.empty([n_grid * n_grid, 2])
         for i in range(n_grid):

@@ -23,7 +23,7 @@ class Model(nn.Module):
             S2Convolution(
                 nfeature_in  = 2,
                 nfeature_out = 10,
-                b_in  = 512,
+                b_in  = 100,
                 b_out = 50,
                 grid=grid_s2),
             nn.BatchNorm3d(10, affine=True),

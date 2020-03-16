@@ -13,10 +13,13 @@ class TrainingSet(torch.utils.data.Dataset):
         anchor = torch.from_numpy(self.anchor_features[index])
         positive = torch.from_numpy(self.positive_features[index])
         negative = torch.from_numpy(self.negative_features[index])
+        print("anchor size1: ", anchor.size(1))
+        #print("anchor size2: ", anchor.size(2))
+        #print("anchor size3: ", anchor.size(3))
         return anchor, positive, negative
 
     def __len__(self):
-        return len(self.ds.anchors)
+        return len(self.anchor_features)
 
     def __genAllFeatures(self, bw):
         n_ds = self.ds.size()
@@ -38,8 +41,8 @@ class TrainingSet(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    ds = DataSource("/tmp/training")
-    ds.loadAll()
+    ds = DataSource("/mnt/data/datasets/Spherical/training-set")
+    ds.load(2)
 
     ts = TrainingSet(ds)
     a,p,n = ts.__getitem__(0)
