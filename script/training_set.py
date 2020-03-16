@@ -13,9 +13,6 @@ class TrainingSet(torch.utils.data.Dataset):
         anchor = torch.from_numpy(self.anchor_features[index])
         positive = torch.from_numpy(self.positive_features[index])
         negative = torch.from_numpy(self.negative_features[index])
-        print("anchor size1: ", anchor.size(1))
-        #print("anchor size2: ", anchor.size(2))
-        #print("anchor size3: ", anchor.size(3))
         return anchor, positive, negative
 
     def __len__(self):
@@ -23,7 +20,7 @@ class TrainingSet(torch.utils.data.Dataset):
 
     def __genAllFeatures(self, bw):
         n_ds = self.ds.size()
-        grid = DHGrid.createGrid(bw)
+        grid = DHGrid.CreateGrid(bw)
 
         anchor_features = [None] * n_ds
         positive_features = [None] * n_ds

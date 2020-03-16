@@ -14,22 +14,23 @@ class Sphere:
 
     def sampleUsingGrid(self, grid):
         cart_sphere = self.__convertSphericalToEuclidean(self.sphere)
-        cart_grid = self.__convertSphericalToEuclidean(grid)
+        cart_grid = DHGrid.ConvertGridToEuclidean(grid)
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(cart_sphere[:, 0:3])
         pcd_tree = o3d.geometry.KDTreeFlann(pcd)
 
         kNearestNeighbors = 1
-        n_sample_points = len(cart_grid)
-        features = np.zeros([2, n_sample_points])
-        for i in range(n_sample_points):
-            [k, idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[i,:], kNearestNeighbors)
+        features = np.zeros([2, grid.shape[1], grid.shape[2]])
+        for i in range(grid.shape[1]):
+            for j in range(grid.shape[2]):
+                [k, idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[:, i, j], kNearestNeighbors)
 
-            for nn in range(kNearestNeighbors):
-                cur_idx = idx[nn]
-                features[0, i] = self.ranges[cur_idx]
-                features[1, i] = self.intensity[cur_idx]
+                # TODO(lbern): Average over all neighbors
+                for nn in range(kNearestNeighbors):
+                    cur_idx = idx[nn]
+                    features[0, i, j] = self.ranges[cur_idx]
+                    features[1, i, j] = self.intensity[cur_idx]
 
         return features
 
@@ -56,10 +57,12 @@ class Sphere:
 
 
 
+
 if __name__ == "__main__":
-    ds = DataSource("/tmp/training")
-    ds.loadAll()
+    ds = DataSource("/mnt/data/datasets/Spherical/training-set")
+    ds.load(2)
 
     sph = Sphere(ds.anchors[0])
-    grid = DHGrid.createGrid(50)
+    grid = DHGrid.CreateGrid(50)
     features = sph.sampleUsingGrid(grid)
+    print("features: ", features.shape)
