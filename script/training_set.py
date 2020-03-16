@@ -30,6 +30,7 @@ class TrainingSet(torch.utils.data.Dataset):
     def __genAllFeatures(self, bw, anchors, positives, negatives):
         n_ds = len(anchors)
         grid = DHGrid.CreateGrid(bw)
+        print("Generating training data...")
 
         #anchor_features = [None] * n_ds
         #positive_features = [None] * n_ds
@@ -37,7 +38,7 @@ class TrainingSet(torch.utils.data.Dataset):
         anchor_features = pymp.shared.list([None] * n_ds)
         positive_features = pymp.shared.list([None] * n_ds)
         negative_features = pymp.shared.list([None] * n_ds)
-        with pymp.Parallel(8) as p:
+        with pymp.Parallel(32) as p:
             for i in p.range(0, n_ds):
                 anchor_sphere = Sphere(anchors[i])
                 positive_sphere = Sphere(positives[i])
@@ -47,6 +48,7 @@ class TrainingSet(torch.utils.data.Dataset):
                 positive_features[i] = positive_sphere.sampleUsingGrid(grid)
                 negative_features[i] = negative_sphere.sampleUsingGrid(grid)
 
+        print("Generated features")
         return anchor_features, positive_features, negative_features
 
     def isTraining(self):
@@ -54,7 +56,7 @@ class TrainingSet(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    ds = DataSource("/mnt/data/datasets/Spherical/training-set")
+    ds = DataSource('/home/berlukas/data/spherical/training-set')
     ds.load(100)
 
     ts = TrainingSet(ds)

@@ -15,7 +15,7 @@ from data_source import DataSource
 from visualize import Visualize
 from sphere import Sphere
 from model import Model
-from loss import TripletLoss
+from loss import TripletLoss, ImprovedTripletLoss
 from training_set import TrainingSet
 from average_meter import AverageMeter
 
@@ -40,20 +40,21 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 
 ds = DataSource('/home/berlukas/data/spherical/training-set')
-ds.load(100)
+ds.load()
 
 
 # ## Initialize the model and the training set
 
 
+#torch.cuda.set_device(1)
 torch.backends.cudnn.benchmark = True
 net = Model().cuda()
-restore = 0
+restore = 1
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 20
-batch_size = 16
+batch_size = 8
 num_workers = 1
-criterion = TripletLoss(margin=2)
+criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 
 result_save = 'triplet_result.txt'
 progress_save = 'triplet_progress.txt'
@@ -74,8 +75,9 @@ fp.write('TripletLoss(margin=2.0\n')
 
 
 bandwith = 100
-train_set = TrainingSet(ds, bandwith)
-train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
+if restore == 0:
+    train_set = TrainingSet(ds, bandwith)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
 
 
 # ## Train model
@@ -106,6 +108,7 @@ if restore ==0:
             data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
             
             embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
+            #print("embedded a: ", embedded_a, " p: ", embedded_p, "n: ", embedded_n)
             optimizer.zero_grad()
 
             dista, distb, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
@@ -126,7 +129,7 @@ if restore ==0:
     net.eval()
 
 else:
-    net.load_state_dict(torch.load(model_read))
+    net.load_state_dict(torch.load(model_save))
     net.eval()
 
 
@@ -142,13 +145,28 @@ list_neg = []
 
 
 # In[8]:
+def accuracy(dista, distb):
+    margin = 0
+    pred = (dista - distb - margin).cpu().data
+    print("pred: ", pred)
+    acc = ((pred < 0).sum()).float()/dista.size(0)
+    print(acc)
+    return acc
+
+def record(dista, distb):
+	list_pos.append(dista.cpu().data.numpy())
+	list_neg.append(distb.cpu().data.numpy())
 
 
 for batch_idx, (data1, data2, data3) in enumerate(test_loader):
-        data1, data2, data3 = data1.cuda(), data2.cuda(), data3.cuda()
-        # data1, data2, data3 = Variable(data1), Variable(data2), Variable(data3)
+        data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
         embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
+        print("embedded a: ", embedded_a)
+        print("embedded p: ", embedded_p)
+        print("embedded n: ", embedded_n)
         dista, distb, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
+        print("dista: ", dista)
+        print("distb: ", distb)
 
         record(dista, distb)
 

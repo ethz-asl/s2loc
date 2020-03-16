@@ -4,3 +4,6 @@
 [submodule "lib/lie_learn"]
 	path = lib/lie_learn
 	url = git@github.com:AMLab-Amsterdam/lie_learn.git
+[submodule "lib/pynvrtc"]
+	path = lib/pynvrtc
+	url = git@github.com:NVIDIA/pynvrtc.git

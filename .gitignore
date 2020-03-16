@@ -131,3 +131,7 @@ dmypy.json
 triplet_progress.txt
 triplet_result.txt
 *.pkl
+cache/
+neg_error.csv
+pos_error.csv
+
