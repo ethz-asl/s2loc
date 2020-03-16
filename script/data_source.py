@@ -64,11 +64,11 @@ class DataSource:
         self.anchors_training = anchors[0:n_training]
         self.anchors_test = anchors[n_training:n_total]
 
-        self.positives_training = anchors[0:n_training]
-        self.positives_test = anchors[n_training:n_total]
+        self.positives_training = positives[0:n_training]
+        self.positives_test = positives[n_training:n_total]
 
-        self.negatives_training = anchors[0:n_training]
-        self.negatives_test = anchors[n_training:n_total]
+        self.negatives_training = negatives[0:n_training]
+        self.negatives_test = negatives[n_training:n_total]
 
     def size(self):
         return self.ds_size
