@@ -3,6 +3,8 @@ from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
 
+import pymp
+
 class TrainingSet(torch.utils.data.Dataset):
     def __init__(self, data_source, bw=100, training=True):
         self.ds = data_source
@@ -29,17 +31,21 @@ class TrainingSet(torch.utils.data.Dataset):
         n_ds = len(anchors)
         grid = DHGrid.CreateGrid(bw)
 
-        anchor_features = [None] * n_ds
-        positive_features = [None] * n_ds
-        negative_features = [None] * n_ds
-        for i in range(n_ds):
-            anchor_sphere = Sphere(anchors[i])
-            positive_sphere = Sphere(positives[i])
-            negative_sphere = Sphere(negatives[i])
+        #anchor_features = [None] * n_ds
+        #positive_features = [None] * n_ds
+        #negative_features = [None] * n_ds
+        anchor_features = pymp.shared.list([None] * n_ds)
+        positive_features = pymp.shared.list([None] * n_ds)
+        negative_features = pymp.shared.list([None] * n_ds)
+        with pymp.Parallel(8) as p:
+            for i in p.range(0, n_ds):
+                anchor_sphere = Sphere(anchors[i])
+                positive_sphere = Sphere(positives[i])
+                negative_sphere = Sphere(negatives[i])
 
-            anchor_features[i] = anchor_sphere.sampleUsingGrid(grid)
-            positive_features[i] = positive_sphere.sampleUsingGrid(grid)
-            negative_features[i] = negative_sphere.sampleUsingGrid(grid)
+                anchor_features[i] = anchor_sphere.sampleUsingGrid(grid)
+                positive_features[i] = positive_sphere.sampleUsingGrid(grid)
+                negative_features[i] = negative_sphere.sampleUsingGrid(grid)
 
         return anchor_features, positive_features, negative_features
 
@@ -49,7 +55,7 @@ class TrainingSet(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     ds = DataSource("/mnt/data/datasets/Spherical/training-set")
-    ds.load(2)
+    ds.load(100)
 
     ts = TrainingSet(ds)
     a,p,n = ts.__getitem__(0)
