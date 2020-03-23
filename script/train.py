@@ -22,9 +22,6 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
 from torch.autograd import Variable
-from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
-from ignite.metrics import Accuracy, Loss
-from ignite.contrib.handlers.tensorboard_logger import *
 
 import sys
 import time
@@ -34,7 +31,6 @@ import pandas as pd
 import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-%matplotlib inline
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -44,7 +40,7 @@ from torch.utils.tensorboard import SummaryWriter
 # Load the dataset, project each point cloud on a sphere and derive a function for it.
 
 
-ds = DataSource('/home/berlukas/data/spherical/training-set')
+ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
 ds.load()
 
 
@@ -57,7 +53,7 @@ net = Model().cuda()
 restore = 0
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 20
-batch_size = 8
+batch_size = 10
 num_workers = 1
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 
