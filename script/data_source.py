@@ -73,6 +73,9 @@ class DataSource:
     def size(self):
         return self.ds_size
 
+    def __len__(self):
+        return self.size()
+
 if __name__ == "__main__":
     ds = DataSource("/mnt/data/datasets/Spherical/training-set")
     ds.load()

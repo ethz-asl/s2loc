@@ -25,7 +25,7 @@ class TrainingSet(torch.utils.data.Dataset):
         return anchor, positive, negative
 
     def __len__(self):
-        return len(self.anchor_features)
+        return len(self.ds)
 
     def __genAllFeatures(self, bw, anchors, positives, negatives):
         n_ds = len(anchors)
