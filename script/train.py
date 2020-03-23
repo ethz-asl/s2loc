@@ -2,14 +2,11 @@
 # coding: utf-8
 
 # # S2Loc Training
-# 
-# Description: We propose to lear a descriptor of point clouds for global localization. 
-# 
+#
+# Description: We propose to lear a descriptor of point clouds for global localization.
+#
 # Author: Lukas Bernreiter (lukas.bernreiter@ieee.org)
-# 
-
-# In[1]:
-
+#
 
 from data_source import DataSource
 from visualize import Visualize
@@ -18,13 +15,18 @@ from model import Model
 from loss import TripletLoss, ImprovedTripletLoss
 from training_set import TrainingSet
 from average_meter import AverageMeter
+from data_splitter import DataSplitter
 
 import torch
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
 from torch.autograd import Variable
+from ignite.engine import Events, create_supervised_trainer, create_supervised_evaluator
+from ignite.metrics import Accuracy, Loss
+from ignite.contrib.handlers.tensorboard_logger import *
 
+import sys
 import time
 import math
 import numpy as np
@@ -32,10 +34,13 @@ import pandas as pd
 import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+%matplotlib inline
+
+from torch.utils.tensorboard import SummaryWriter
 
 
 # ## Load All Data
-# 
+#
 # Load the dataset, project each point cloud on a sphere and derive a function for it.
 
 
@@ -49,7 +54,7 @@ ds.load()
 #torch.cuda.set_device(1)
 torch.backends.cudnn.benchmark = True
 net = Model().cuda()
-restore = 1
+restore = 0
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 20
 batch_size = 8
@@ -69,20 +74,20 @@ fp.write('bandwidths: [512, 50, 25, 15, 5]\n')
 fp.write('batch_size = 16\n')
 fp.write('training epoch: 20\n')
 fp.write('TripletLoss(margin=2.0\n')
-
-
-# In[6]:
-
+writer = SummaryWriter()
 
 bandwith = 100
-if restore == 0:
-    train_set = TrainingSet(ds, bandwith)
-    train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
+train_set = TrainingSet(ds, bandwith)
+print("total set size: ", len(train_set))
+
+split = DataSplitter(train_set, shuffle=True)
+train_loader, val_loader, test_loader = split.get_split(batch_size=batch_size, num_workers=1)
+print("train size: ", len(train_loader)*batch_size)
+print("val size: ", len(val_loader)*batch_size)
+print("test size: ", len(test_loader)*batch_size)
 
 
 # ## Train model
-
-# In[7]:
 
 
 def adjust_learning_rate_exp(optimizer, epoch_num, lr=5e-3):
@@ -93,101 +98,122 @@ def adjust_learning_rate_exp(optimizer, epoch_num, lr=5e-3):
 
     return new_lr
 
-
-# In[9]:
-
-
-if restore ==0:
-    net.train()
-
-    for epoch in range(n_epochs):
-        lr = adjust_learning_rate_exp(optimizer, epoch_num=epoch)
-        loss_ = 0.0
-        t0 = time.time()
-        for batch_idx, (data1, data2, data3) in enumerate(train_loader):
-            data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
-            
-            embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
-            #print("embedded a: ", embedded_a, " p: ", embedded_p, "n: ", embedded_n)
-            optimizer.zero_grad()
-
-            dista, distb, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
-            loss.backward()
-            optimizer.step()
-            loss_ += loss_total.item()
-            if batch_idx % 100 == 99:
-                t1 = time.time()
-                fpp.write('%.5f\n' %(loss_ / 100))
-                print('[Epoch %d, Batch %4d] loss: %.5f time: %.5f lr: %.3e' %
-                    (epoch + 1, batch_idx + 1, loss_ / 100, (t1-t0) / 60, lr))
-                t0 = t1
-                loss_ = 0.0
-
-    print('training finished!')
-    torch.save(net.state_dict(), model_save)
-    # validating
-    net.eval()
-
-else:
-    net.load_state_dict(torch.load(model_save))
-    net.eval()
-
-
-# In[7]:
-
-
-accs = AverageMeter()
-test_set = TrainingSet(ds, bandwith, False)
-test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
+val_accs = AverageMeter()
+#test_set = TrainingSet(ds, bandwith, False)
+#test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
 # record the error of each triplet
 list_pos = []
 list_neg = []
+loss_ = 0
 
-
-# In[8]:
 def accuracy(dista, distb):
     margin = 0
     pred = (dista - distb - margin).cpu().data
-    print("pred: ", pred)
+    # print(pred)
     acc = ((pred < 0).sum()).float()/dista.size(0)
-    print(acc)
+    # print(acc)
     return acc
 
 def record(dista, distb):
-	list_pos.append(dista.cpu().data.numpy())
-	list_neg.append(distb.cpu().data.numpy())
+    list_pos.append(dista.cpu().data.numpy())
+    list_neg.append(distb.cpu().data.numpy())
 
-
-for batch_idx, (data1, data2, data3) in enumerate(test_loader):
+def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
+    net.train()
+    for batch_idx, (data1, data2, data3) in enumerate(train_loader):
         data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
         embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
-        print("embedded a: ", embedded_a)
-        print("embedded p: ", embedded_p)
-        print("embedded n: ", embedded_n)
-        dista, distb, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
-        print("dista: ", dista)
-        print("distb: ", distb)
+        optimizer.zero_grad()
 
-        record(dista, distb)
+        dista, distb, loss_triplet, loss_total = criterion(embedded_a, embedded_p, embedded_n)
+        loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
+        loss = loss_triplet + 0.001 * loss_embedd
+        #loss = loss_triplet
 
-        acc = accuracy(dista, distb)
-        accs.update(acc, data1.size(0))
+        loss.backward()
+        optimizer.step()
+        loss_ += loss_total.item()
 
-array_pos = np.array(list_pos)
-array_pos = array_pos.reshape(-1,)
-dataframe = pd.DataFrame(array_pos)
-dataframe.to_csv("pos_error.csv", index=0)
-array_neg = np.array(list_neg)
-array_neg = array_neg.reshape(-1,)
-dataframe = pd.DataFrame(array_neg)
-dataframe.to_csv("neg_error.csv", index=0)
+        writer.add_scalar('Train/Loss_Triplet', loss_triplet, n_iter)
+        writer.add_scalar('Train/Loss_Embedd', loss_embedd, n_iter)
+        writer.add_scalar('Train/Loss', loss, n_iter)
+        n_iter += 1
+
+        if batch_idx % 100 == 99:
+            t1 = time.time()
+            fpp.write('%.5f\n' %(loss_ / 100))
+            print('[Epoch %d, Batch %4d] loss: %.5f time: %.5f lr: %.3e' %
+                (epoch + 1, batch_idx + 1, loss_ / 100, (t1-t0) / 60, lr))
+            t0 = t1
+            loss_ = 0.0
+    return n_iter
+
+def validate(net, criterion, optimizer, writer, epoch, n_iter):
+    net.eval()
+    with torch.no_grad():
+        for batch_idx, (data1, data2, data3) in enumerate(val_loader):
+            data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
+            embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
+            optimizer.zero_grad()
+
+            dista, distb, loss_triplet, loss_total = criterion(embedded_a, embedded_p, embedded_n)
+            loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
+            loss = loss_triplet + 0.001 * loss_embedd
 
 
-# In[9]:
+            acc = accuracy(dista, distb)
+            val_accs.update(acc, data1.size(0))
+            writer.add_scalar('Validation/Loss_Triplet', loss_triplet, n_iter)
+            writer.add_scalar('Validation/Loss_Embedd', loss_embedd, n_iter)
+            writer.add_scalar('Validation/Loss', loss, n_iter)
+            writer.add_scalar('Validation/Accuracy', val_accs.avg, n_iter)
+            n_iter += 1
+    return n_iter
 
+def test(net, criterion, writer):
+    n_iter = 0
+    net.eval()
+    test_accs = AverageMeter()
+    test_pos_dist = AverageMeter()
+    test_neg_dist = AverageMeter()
+    for batch_idx, (data1, data2, data3) in enumerate(test_loader):
+            embedded_a, embedded_p, embedded_n = net(data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
+            dist_to_pos, dist_to_neg, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
+            writer.add_scalar('Test/Loss', loss, n_iter)
 
-fp.write('Validation set:  Accuracy: {:.5f}%\n'.format(100. * accs.avg))
-print('Validation set:  Accuracy: {:.5f}%\n'.format(100. * accs.avg))
+            acc = accuracy(dist_to_pos, dist_to_neg)
+            test_accs.update(acc, data1.size(0))
+            test_pos_dist.update(dist_to_pos.cpu().data.numpy().sum())
+            test_neg_dist.update(dist_to_neg.cpu().data.numpy().sum())
+
+            writer.add_scalar('Test/Accuracy', test_accs.avg, n_iter)
+            writer.add_scalar('Test/Distance/Positive', test_pos_dist.avg, n_iter)
+            writer.add_scalar('Test/Distance/Negative', test_neg_dist.avg, n_iter)
+
+            n_iter = n_iter + 1
+
+if restore ==0:
+    train_iter = 0
+    val_iter = 0
+    loss_ = 0.0
+    for epoch in range(n_epochs):
+        lr = adjust_learning_rate_exp(optimizer, epoch_num=epoch)
+        t0 = time.time()
+
+        train_iter = train(net, criterion, optimizer, writer, epoch, train_iter, loss_, t0)
+
+        val_iter = validate(net, criterion, optimizer, writer, epoch, val_iter)
+
+        writer.add_scalar('Train/lr', lr, epoch)
+
+    print('training finished!')
+    torch.save(net.state_dict(), model_save)
+else:
+    net.load_state_dict(torch.load(model_save))
+
+## Test
+
+test(net, criterion, writer)
+writer.close()
 fp.close()
 fpp.close()
-
