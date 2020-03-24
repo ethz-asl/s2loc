@@ -19,9 +19,10 @@ from data_splitter import DataSplitter
 
 import torch
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
+from torch.autograd import Variable
 import torchvision
 import torchvision.transforms as transforms
-from torch.autograd import Variable
 
 import sys
 import time
@@ -31,9 +32,7 @@ import pandas as pd
 import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-
-from torch.utils.tensorboard import SummaryWriter
-
+from tqdm.auto import tqdm
 
 # ## Load All Data
 #
@@ -42,8 +41,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 #ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
 ds = DataSource('/home/berlukas/data/spherical/training', 1.0)
-ds.load(5000)
-
+ds.load(100)
 
 # ## Initialize the model and the training set
 
@@ -54,7 +52,7 @@ net = Model().cuda()
 restore = 0
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 20
-batch_size = 10
+batch_size = 12
 num_workers = 1
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 
@@ -79,13 +77,11 @@ print("total set size: ", len(train_set))
 
 split = DataSplitter(train_set, shuffle=True)
 train_loader, val_loader, test_loader = split.get_split(batch_size=batch_size, num_workers=1)
-print("train size: ", len(train_loader)*batch_size)
-print("val size: ", len(val_loader)*batch_size)
-print("test size: ", len(test_loader)*batch_size)
-
+print("Training size: ", len(train_loader)*batch_size)
+print("Validation size: ", len(val_loader)*batch_size)
+print("Test size: ", len(test_loader)*batch_size)
 
 # ## Train model
-
 
 def adjust_learning_rate_exp(optimizer, epoch_num, lr=5e-3):
     decay_rate = 0.96
@@ -96,24 +92,13 @@ def adjust_learning_rate_exp(optimizer, epoch_num, lr=5e-3):
     return new_lr
 
 val_accs = AverageMeter()
-#test_set = TrainingSet(ds, bandwith, False)
-#test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
-# record the error of each triplet
-list_pos = []
-list_neg = []
 loss_ = 0
 
 def accuracy(dista, distb):
     margin = 0
     pred = (dista - distb - margin).cpu().data
-    # print(pred)
     acc = ((pred < 0).sum()).float()/dista.size(0)
-    # print(acc)
     return acc
-
-def record(dista, distb):
-    list_pos.append(dista.cpu().data.numpy())
-    list_neg.append(distb.cpu().data.numpy())
 
 def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
     net.train()
@@ -193,8 +178,8 @@ if restore ==0:
     train_iter = 0
     val_iter = 0
     loss_ = 0.0
-    for epoch in range(n_epochs):
-        print("Starting epoch ", epoch)
+    print(f'Starting training using {n_epochs} epochs');
+    for epoch in tqdm(range(n_epochs)):
         lr = adjust_learning_rate_exp(optimizer, epoch_num=epoch)
         t0 = time.time()
 
@@ -204,7 +189,7 @@ if restore ==0:
 
         writer.add_scalar('Train/lr', lr, epoch)
 
-    print("Testing finished!")
+    print("Training finished!")
     torch.save(net.state_dict(), model_save)
 else:
     net.load_state_dict(torch.load(model_save))

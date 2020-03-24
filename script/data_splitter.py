@@ -13,21 +13,15 @@ class DataSplitter:
         self.dataset = dataset
 
         dataset_size = len(dataset)
-        print("[splitter] dataset size: ", dataset_size);
         self.indices = list(range(dataset_size))
         test_split = int(np.floor(test_train_split * dataset_size))
-        print("[splitter] test_split: ", test_split);
 
         if shuffle:
             np.random.shuffle(self.indices)
 
         train_indices, self.test_indices = self.indices[:test_split], self.indices[test_split:]
         train_size = len(train_indices)
-        print("[splitter] train size: ", train_size);
-
         validation_split = int(np.floor((1 - val_train_split) * train_size))
-        print("[splitter] val split: ", validation_split);
-
         self.train_indices, self.val_indices = train_indices[ : validation_split], train_indices[validation_split:]
 
         self.train_sampler = SubsetRandomSampler(self.train_indices)

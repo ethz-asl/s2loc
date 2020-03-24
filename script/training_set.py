@@ -39,23 +39,6 @@ class TrainingSet(torch.utils.data.Dataset):
     def __genAllFeatures(self, bw, anchors, positives, negatives):
         n_ds = len(anchors)
         grid = DHGrid.CreateGrid(bw)
-        print("Generating training data...")
-
-        '''
-        anchor_features = pymp.shared.list([None] * n_ds)
-        positive_features = pymp.shared.list([None] * n_ds)
-        negative_features = pymp.shared.list([None] * n_ds)
-        with pymp.Parallel(32) as p:
-            for i in p.range(0, n_ds):
-                anchor_sphere = Sphere(anchors[i])
-                positive_sphere = Sphere(positives[i])
-                negative_sphere = Sphere(negatives[i])
-
-                anchor_features[i] = anchor_sphere.sampleUsingGrid(grid)
-                positive_features[i] = positive_sphere.sampleUsingGrid(grid)
-                negative_features[i] = negative_sphere.sampleUsingGrid(grid)
-        '''
-
         print("Generating anchor spheres")
         anchor_features = process_map(partial(progresser), anchors, max_workers=32)
         print("Generating positive spheres")
