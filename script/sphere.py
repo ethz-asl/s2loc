@@ -24,11 +24,10 @@ class Sphere:
         features = np.zeros([2, grid.shape[1], grid.shape[2]])
         for i in range(grid.shape[1]):
             for j in range(grid.shape[2]):
-                [k, idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[:, i, j], kNearestNeighbors)
+                [k, nn_idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[:, i, j], kNearestNeighbors)
 
                 # TODO(lbern): Average over all neighbors
-                for nn in range(kNearestNeighbors):
-                    cur_idx = idx[nn]
+                for cur_idx in nn_idx:
                     features[0, i, j] = self.ranges[cur_idx]
                     features[1, i, j] = self.intensity[cur_idx]
 

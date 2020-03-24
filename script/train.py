@@ -40,8 +40,9 @@ from torch.utils.tensorboard import SummaryWriter
 # Load the dataset, project each point cloud on a sphere and derive a function for it.
 
 
-ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
-ds.load()
+#ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
+ds = DataSource('/home/berlukas/data/spherical/training', 1.0)
+ds.load(5000)
 
 
 # ## Initialize the model and the training set
@@ -193,6 +194,7 @@ if restore ==0:
     val_iter = 0
     loss_ = 0.0
     for epoch in range(n_epochs):
+        print("Starting epoch ", epoch)
         lr = adjust_learning_rate_exp(optimizer, epoch_num=epoch)
         t0 = time.time()
 
@@ -202,14 +204,16 @@ if restore ==0:
 
         writer.add_scalar('Train/lr', lr, epoch)
 
-    print('training finished!')
+    print("Testing finished!")
     torch.save(net.state_dict(), model_save)
 else:
     net.load_state_dict(torch.load(model_save))
 
 ## Test
 
+print("Starting testing...")
 test(net, criterion, writer)
+print("Testing finished!")
 writer.close()
 fp.close()
 fpp.close()

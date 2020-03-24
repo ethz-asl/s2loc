@@ -3,7 +3,16 @@ from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
 
+from tqdm.auto import tqdm, trange
+from tqdm.contrib.concurrent import process_map, thread_map
+from functools import partial
+
 import pymp
+
+grid = DHGrid.CreateGrid(100)
+def progresser(sample, auto_position=True, write_safe=False, blocking=True, progress=False):
+    sample_sphere = Sphere(sample)
+    return sample_sphere.sampleUsingGrid(grid)
 
 class TrainingSet(torch.utils.data.Dataset):
     def __init__(self, data_source, bw=100, training=True):
@@ -32,9 +41,7 @@ class TrainingSet(torch.utils.data.Dataset):
         grid = DHGrid.CreateGrid(bw)
         print("Generating training data...")
 
-        #anchor_features = [None] * n_ds
-        #positive_features = [None] * n_ds
-        #negative_features = [None] * n_ds
+        '''
         anchor_features = pymp.shared.list([None] * n_ds)
         positive_features = pymp.shared.list([None] * n_ds)
         negative_features = pymp.shared.list([None] * n_ds)
@@ -47,6 +54,15 @@ class TrainingSet(torch.utils.data.Dataset):
                 anchor_features[i] = anchor_sphere.sampleUsingGrid(grid)
                 positive_features[i] = positive_sphere.sampleUsingGrid(grid)
                 negative_features[i] = negative_sphere.sampleUsingGrid(grid)
+        '''
+
+        print("Generating anchor spheres")
+        anchor_features = process_map(partial(progresser), anchors, max_workers=32)
+        print("Generating positive spheres")
+        positive_features = process_map(partial(progresser), positives, max_workers=32)
+        print("Generating negative spheres")
+        negative_features = process_map(partial(progresser), negatives, max_workers=32)
+
 
         print("Generated features")
         return anchor_features, positive_features, negative_features
