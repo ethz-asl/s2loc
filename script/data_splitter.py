@@ -62,6 +62,15 @@ class DataSplitter:
         self.test_loader = torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, sampler=self.test_sampler, shuffle=False, num_workers=num_workers)
         return self.test_loader
 
+    def get_train_size(self):
+        return len(self.train_indices)
+
+    def get_val_size(self):
+        return len(self.val_indices)
+
+    def get_test_size(self):
+        return len(self.test_indices)
+
 if __name__ == "__main__":
     from data_source import DataSource
     from training_set import TrainingSet
