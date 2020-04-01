@@ -170,8 +170,7 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
 
 def test(net, criterion, writer):
     with open('test_indices.txt','wb') as f:
-        for line in split.test_indices:
-            np.savetxt(f, line, fmt='%d')
+        np.savetxt(f, np.array(split.test_indices), fmt='%d')
 
     n_iter = 0
     net.eval()
@@ -199,7 +198,7 @@ def test(net, criterion, writer):
             n_iter = n_iter + 1
 
     desc_anchors = np.array(anchor_embeddings).reshape([-1, descriptor_size])
-    desc_positives = np.array(postive_embeddings).reshape([-1, descriptor_size])
+    desc_positives = np.array(positive_embeddings).reshape([-1, descriptor_size])
     sys.setrecursionlimit(50000)
     tree = spatial.KDTree(desc_positives)
     n_nearest_neighbors = 1
@@ -211,7 +210,7 @@ def test(net, criterion, writer):
         for i in nn_indices:
             dist = spatial.distance.euclidean(desc_positives[idx,:], anchor_embeddings[idx])
             if (dist <= max_dist):
-                pos_count++
+                pos_count = pos_count + 1;
                 break
     precision = (pos_count*1.0) / test_size
     print("Precision ", precision)
