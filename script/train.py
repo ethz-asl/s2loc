@@ -50,13 +50,13 @@ ds.load(100)
 # ## Initialize the model and the training set
 
 
-#torch.cuda.set_device(1)
+torch.cuda.set_device(1)
 torch.backends.cudnn.benchmark = True
 net = Model().cuda()
-restore = True
+restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 20
-batch_size = 14
+batch_size = 5 #14
 num_workers = 1
 descriptor_size = 32
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
@@ -166,8 +166,10 @@ def test(net, criterion, writer):
     test_accs = AverageMeter()
     test_pos_dist = AverageMeter()
     test_neg_dist = AverageMeter()
-    anchor_embeddings = [None] * test_size
-    positive_embeddings = [None] * test_size
+    anchor_embeddings = []
+    positive_embeddings = []
+    #anchor_embeddings = np.empty([test_size, descriptor_size])
+    #positive_embeddings = np.empty([test_size, descriptor_size])
     for batch_idx, (data1, data2, data3) in enumerate(test_loader):
             embedded_a, embedded_p, embedded_n = net(data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
             dist_to_pos, dist_to_neg, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
@@ -182,29 +184,56 @@ def test(net, criterion, writer):
             writer.add_scalar('Test/Distance/Positive', test_pos_dist.avg, n_iter)
             writer.add_scalar('Test/Distance/Negative', test_neg_dist.avg, n_iter)
 
-            anchor_embeddings[n_iter] = embedded_a.cpu().data.numpy()
-            anchor_embeddings[n_iter] = embedded_p.cpu().data.numpy()
+            anchor_embeddings.append(embedded_a.cpu().data.numpy().reshape([1,-1]))
+            positive_embeddings.append(embedded_p.cpu().data.numpy().reshape([1,-1]))
             n_iter = n_iter + 1
 
-    desc_anchors = np.array(anchor_embeddings).reshape([-1, descriptor_size])
-    desc_positives = np.array(positive_embeddings).reshape([-1, descriptor_size])
+    desc_anchors = np.array(anchor_embeddings).reshape([test_size, descriptor_size])
+    desc_positives = np.array(positive_embeddings).reshape([test_size, descriptor_size])
+    print(np.array(desc_positives).shape)
+
     sys.setrecursionlimit(50000)
     tree = spatial.KDTree(desc_positives)
-    n_nearest_neighbors = 1
     p_norm = 2
-    max_dist = 5/3
-    pos_count = 0
-    for idx in range(test_size):
-        nn_dists, nn_indices = tree.query(anchor_embeddings[idx], p = p_norm, k = n_nearest_neighbors)
-        for i in nn_indices:
-            dist = spatial.distance.euclidean(desc_positives[idx,:], anchor_embeddings[idx])
-            if (dist <= max_dist):
-                pos_count = pos_count + 1;
-                break
-    precision = (pos_count*1.0) / test_size
-    print("Precision ", precision)
+    max_pos_dist = 0.05
+    max_anchor_dist = 1
+    for n_nearest_neighbors in range(1,21):
+        pos_count = 0
+        anchor_count = 0
+        idx_count = 0
+        for idx in range(test_size):
+            nn_dists, nn_indices = tree.query(desc_anchors[idx,:], p = p_norm, k = n_nearest_neighbors)
+            nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
 
-if restore:
+            for nn_i in nn_indices:
+                if (nn_i >= test_size):
+                    break;
+                dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_positives[idx,:])
+                if (dist <= max_pos_dist):
+                    pos_count = pos_count + 1;
+                    break
+            for nn_i in nn_indices:
+                if (nn_i >= test_size):
+                    break;
+                dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_anchors[idx,:])
+                if (dist <= max_anchor_dist):
+                    anchor_count = anchor_count + 1;
+                    break
+            for nn_i in nn_indices:
+                if (nn_i == idx):
+                    idx_count = idx_count + 1;
+                    break
+        pos_precision = (pos_count*1.0) / test_size
+        anchor_precision = (anchor_count*1.0) / test_size
+        idx_precision = (idx_count*1.0) / test_size
+        print(f'Precision pos: {pos_precision} for {n_nearest_neighbors} neighbors.');
+        print(f'Precision anchor: {anchor_precision} for {n_nearest_neighbors} neighbors.');
+        print(f'Precision idx: {idx_precision} for {n_nearest_neighbors} neighbors.');
+        writer.add_scalar('Test/Precision/Positive_Distance', pos_precision, n_nearest_neighbors)
+        writer.add_scalar('Test/Precision/Anchor_Distance', anchor_precision, n_nearest_neighbors)
+        writer.add_scalar('Test/Precision/Index_Count', idx_precision, n_nearest_neighbors)
+
+if not restore:
     train_iter = 0
     val_iter = 0
     loss_ = 0.0
