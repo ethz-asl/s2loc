@@ -9,8 +9,7 @@ from functools import partial
 
 import pymp
 
-grid = DHGrid.CreateGrid(100)
-def progresser(sample, auto_position=True, write_safe=False, blocking=True, progress=False):
+def progresser(sample, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
     sample_sphere = Sphere(sample)
     return sample_sphere.sampleUsingGrid(grid)
 
@@ -40,11 +39,11 @@ class TrainingSet(torch.utils.data.Dataset):
         n_ds = len(anchors)
         grid = DHGrid.CreateGrid(bw)
         print("Generating anchor spheres")
-        anchor_features = process_map(partial(progresser), anchors, max_workers=32)
+        anchor_features = process_map(partial(progresser, grid=grid), anchors, max_workers=32)
         print("Generating positive spheres")
-        positive_features = process_map(partial(progresser), positives, max_workers=32)
+        positive_features = process_map(partial(progresser, grid=grid), positives, max_workers=32)
         print("Generating negative spheres")
-        negative_features = process_map(partial(progresser), negatives, max_workers=32)
+        negative_features = process_map(partial(progresser, grid=grid), negatives, max_workers=32)
 
 
         print("Generated features")

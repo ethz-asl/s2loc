@@ -52,7 +52,7 @@ net = Model().cuda()
 restore = 0
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 20
-batch_size = 12
+batch_size = 14
 num_workers = 1
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 
