@@ -23,6 +23,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 import torchvision
 import torchvision.transforms as transforms
+from torch.autograd import Variable
+from torch.utils.tensorboard import SummaryWriter
 
 import sys
 import time
@@ -33,6 +35,8 @@ import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from tqdm.auto import tqdm
+from scipy import spatial
+
 
 # ## Load All Data
 #
@@ -49,19 +53,18 @@ ds.load(100)
 #torch.cuda.set_device(1)
 torch.backends.cudnn.benchmark = True
 net = Model().cuda()
-restore = 0
+restore = True
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 20
 batch_size = 14
 num_workers = 1
+descriptor_size = 32
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 
 result_save = 'triplet_result.txt'
-progress_save = 'triplet_progress.txt'
 model_save = 'net_params_new_1.pkl'
 
 fp = open(result_save,'w')
-fpp = open(progress_save, 'w')
 n_parameters = sum([p.data.nelement() for p in net.parameters()])
 fp.write('Number of params: {}\n'.format(n_parameters))
 fp.write('features: [2, 10, 16, 20, 60]\n')
@@ -77,9 +80,12 @@ print("total set size: ", len(train_set))
 
 split = DataSplitter(train_set, shuffle=True)
 train_loader, val_loader, test_loader = split.get_split(batch_size=batch_size, num_workers=1)
-print("Training size: ", len(train_loader)*batch_size)
-print("Validation size: ", len(val_loader)*batch_size)
-print("Test size: ", len(test_loader)*batch_size)
+train_size = split.get_train_size()
+val_size = split.get_val_size()
+test_size = split.get_test_size()
+print("train size: ", train_size)
+print("val size: ", val_size)
+print("test size: ", test_size)
 
 # ## Train model
 
@@ -123,7 +129,6 @@ def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
 
         if batch_idx % 100 == 99:
             t1 = time.time()
-            fpp.write('%.5f\n' %(loss_ / 100))
             print('[Epoch %d, Batch %4d] loss: %.5f time: %.5f lr: %.3e' %
                 (epoch + 1, batch_idx + 1, loss_ / 100, (t1-t0) / 60, lr))
             t0 = t1
@@ -153,11 +158,16 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
     return n_iter
 
 def test(net, criterion, writer):
+    with open('test_indices.txt','wb') as f:
+        np.savetxt(f, np.array(split.test_indices), fmt='%d')
+
     n_iter = 0
     net.eval()
     test_accs = AverageMeter()
     test_pos_dist = AverageMeter()
     test_neg_dist = AverageMeter()
+    anchor_embeddings = [None] * test_size
+    positive_embeddings = [None] * test_size
     for batch_idx, (data1, data2, data3) in enumerate(test_loader):
             embedded_a, embedded_p, embedded_n = net(data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
             dist_to_pos, dist_to_neg, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
@@ -172,9 +182,29 @@ def test(net, criterion, writer):
             writer.add_scalar('Test/Distance/Positive', test_pos_dist.avg, n_iter)
             writer.add_scalar('Test/Distance/Negative', test_neg_dist.avg, n_iter)
 
+            anchor_embeddings[n_iter] = embedded_a.cpu().data.numpy()
+            anchor_embeddings[n_iter] = embedded_p.cpu().data.numpy()
             n_iter = n_iter + 1
 
-if restore ==0:
+    desc_anchors = np.array(anchor_embeddings).reshape([-1, descriptor_size])
+    desc_positives = np.array(positive_embeddings).reshape([-1, descriptor_size])
+    sys.setrecursionlimit(50000)
+    tree = spatial.KDTree(desc_positives)
+    n_nearest_neighbors = 1
+    p_norm = 2
+    max_dist = 5/3
+    pos_count = 0
+    for idx in range(test_size):
+        nn_dists, nn_indices = tree.query(anchor_embeddings[idx], p = p_norm, k = n_nearest_neighbors)
+        for i in nn_indices:
+            dist = spatial.distance.euclidean(desc_positives[idx,:], anchor_embeddings[idx])
+            if (dist <= max_dist):
+                pos_count = pos_count + 1;
+                break
+    precision = (pos_count*1.0) / test_size
+    print("Precision ", precision)
+
+if restore:
     train_iter = 0
     val_iter = 0
     loss_ = 0.0
@@ -201,4 +231,3 @@ test(net, criterion, writer)
 print("Testing finished!")
 writer.close()
 fp.close()
-fpp.close()

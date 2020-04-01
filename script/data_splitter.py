@@ -19,8 +19,12 @@ class DataSplitter:
         if shuffle:
             np.random.shuffle(self.indices)
 
+        print("[splitter] indices size: ", len(self.indices))
         train_indices, self.test_indices = self.indices[:test_split], self.indices[test_split:]
         train_size = len(train_indices)
+        print("[splitter] train size: ", train_size)
+        print("[splitter] test size: ", len(self.test_indices))
+
         validation_split = int(np.floor((1 - val_train_split) * train_size))
         self.train_indices, self.val_indices = train_indices[ : validation_split], train_indices[validation_split:]
 
@@ -55,6 +59,15 @@ class DataSplitter:
         logging.debug('Initializing test dataloader')
         self.test_loader = torch.utils.data.DataLoader(self.dataset, batch_size=batch_size, sampler=self.test_sampler, shuffle=False, num_workers=num_workers)
         return self.test_loader
+
+    def get_train_size(self):
+        return len(self.train_indices)
+
+    def get_val_size(self):
+        return len(self.val_indices)
+
+    def get_test_size(self):
+        return len(self.test_indices)
 
 if __name__ == "__main__":
     from data_source import DataSource
