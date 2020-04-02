@@ -19,11 +19,8 @@ class DataSplitter:
         if shuffle:
             np.random.shuffle(self.indices)
 
-        print("[splitter] indices size: ", len(self.indices))
         train_indices, self.test_indices = self.indices[:test_split], self.indices[test_split:]
         train_size = len(train_indices)
-        print("[splitter] train size: ", train_size)
-        print("[splitter] test size: ", len(self.test_indices))
 
         validation_split = int(np.floor((1 - val_train_split) * train_size))
         self.train_indices, self.val_indices = train_indices[ : validation_split], train_indices[validation_split:]

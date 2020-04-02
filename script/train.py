@@ -45,7 +45,7 @@ from scipy import spatial
 
 #ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
 ds = DataSource('/home/berlukas/data/spherical/training', 1.0)
-ds.load(100)
+ds.load(5000)
 
 # ## Initialize the model and the training set
 
