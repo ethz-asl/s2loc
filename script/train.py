@@ -19,12 +19,11 @@ from data_splitter import DataSplitter
 
 import torch
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
-from torch.autograd import Variable
 import torchvision
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
+from torchsummary import summary
 
 import sys
 import time
@@ -34,6 +33,7 @@ import pandas as pd
 import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+
 from tqdm.auto import tqdm
 from scipy import spatial
 
@@ -44,48 +44,49 @@ from scipy import spatial
 
 
 #ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
-ds = DataSource('/home/berlukas/data/spherical/training', 1.0)
-ds.load(5000)
+ds = DataSource('/media/scratch/berlukas/spherical/training', 1.0)
+ds.load(10000)
 
 # ## Initialize the model and the training set
 
-
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 torch.backends.cudnn.benchmark = True
 net = Model().cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
-n_epochs = 20
-batch_size = 5 #14
-num_workers = 1
-descriptor_size = 32
+n_epochs = 50
+batch_size = 12
+num_workers = 12
+descriptor_size = 64
+bandwith = 100
+net_input_size = 2*bandwith
+n_features = 2
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
-
-result_save = 'triplet_result.txt'
+writer = SummaryWriter()
 model_save = 'net_params_new_1.pkl'
 
-fp = open(result_save,'w')
-n_parameters = sum([p.data.nelement() for p in net.parameters()])
-fp.write('Number of params: {}\n'.format(n_parameters))
-fp.write('features: [2, 10, 16, 20, 60]\n')
-fp.write('bandwidths: [512, 50, 25, 15, 5]\n')
-fp.write('batch_size = 16\n')
-fp.write('training epoch: 20\n')
-fp.write('TripletLoss(margin=2.0\n')
-writer = SummaryWriter()
+summary(net, input_size=[(2, 200, 200), (2, 200, 200), (2, 200, 200)])
 
-bandwith = 100
-train_set = TrainingSet(ds, bandwith)
-print("total set size: ", len(train_set))
+train_set = TrainingSet(ds, restore, bandwith)
+print("Total size: ", len(train_set))
+split = DataSplitter(train_set, restore, shuffle=True)
 
-split = DataSplitter(train_set, shuffle=True)
-train_loader, val_loader, test_loader = split.get_split(batch_size=batch_size, num_workers=1)
+train_loader, val_loader, test_loader = split.get_split(batch_size=batch_size, num_workers=num_workers)
 train_size = split.get_train_size()
 val_size = split.get_val_size()
 test_size = split.get_test_size()
-print("train size: ", train_size)
-print("val size: ", val_size)
-print("test size: ", test_size)
+print("Training size: ", train_size)
+print("Validation size: ", val_size)
+print("Testing size: ", test_size)
+
+visualize = False
+if visualize:
+    first_anchor = Sphere(ds.anchors_training[0])
+    len(first_anchor.point_cloud)
+
+    viz = Visualize()
+    viz.visualizeRawPointCloud(first_anchor, True)
+    viz.visualizeSphere(first_anchor, True)
 
 # ## Train model
 
@@ -166,10 +167,8 @@ def test(net, criterion, writer):
     test_accs = AverageMeter()
     test_pos_dist = AverageMeter()
     test_neg_dist = AverageMeter()
-    anchor_embeddings = []
-    positive_embeddings = []
-    #anchor_embeddings = np.empty([test_size, descriptor_size])
-    #positive_embeddings = np.empty([test_size, descriptor_size])
+    anchor_embeddings = np.empty(1)
+    positive_embeddings = np.empty(1)
     for batch_idx, (data1, data2, data3) in enumerate(test_loader):
             embedded_a, embedded_p, embedded_n = net(data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
             dist_to_pos, dist_to_neg, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
@@ -184,12 +183,14 @@ def test(net, criterion, writer):
             writer.add_scalar('Test/Distance/Positive', test_pos_dist.avg, n_iter)
             writer.add_scalar('Test/Distance/Negative', test_neg_dist.avg, n_iter)
 
-            anchor_embeddings.append(embedded_a.cpu().data.numpy().reshape([1,-1]))
-            positive_embeddings.append(embedded_p.cpu().data.numpy().reshape([1,-1]))
+            anchor_embeddings = np.append(anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1,-1]))
+            positive_embeddings = np.append(positive_embeddings, embedded_p.cpu().data.numpy().reshape([1,-1]))
             n_iter = n_iter + 1
 
-    desc_anchors = np.array(anchor_embeddings).reshape([test_size, descriptor_size])
-    desc_positives = np.array(positive_embeddings).reshape([test_size, descriptor_size])
+    #import pdb; pdb.set_trace()
+
+    desc_anchors = anchor_embeddings[1:].reshape([test_size, descriptor_size])
+    desc_positives = positive_embeddings[1:].reshape([test_size, descriptor_size])
     print(np.array(desc_positives).shape)
 
     sys.setrecursionlimit(50000)
@@ -226,9 +227,6 @@ def test(net, criterion, writer):
         pos_precision = (pos_count*1.0) / test_size
         anchor_precision = (anchor_count*1.0) / test_size
         idx_precision = (idx_count*1.0) / test_size
-        print(f'Precision pos: {pos_precision} for {n_nearest_neighbors} neighbors.');
-        print(f'Precision anchor: {anchor_precision} for {n_nearest_neighbors} neighbors.');
-        print(f'Precision idx: {idx_precision} for {n_nearest_neighbors} neighbors.');
         writer.add_scalar('Test/Precision/Positive_Distance', pos_precision, n_nearest_neighbors)
         writer.add_scalar('Test/Precision/Anchor_Distance', anchor_precision, n_nearest_neighbors)
         writer.add_scalar('Test/Precision/Index_Count', idx_precision, n_nearest_neighbors)
@@ -259,4 +257,3 @@ print("Starting testing...")
 test(net, criterion, writer)
 print("Testing finished!")
 writer.close()
-fp.close()

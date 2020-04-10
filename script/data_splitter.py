@@ -3,18 +3,36 @@ import logging
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 import numpy as np
 
 class DataSplitter:
 
-    def __init__(self, dataset, test_train_split=0.8, val_train_split=0.1, shuffle=False):
+    def __init__(self, dataset, restore, test_train_split=0.8, val_train_split=0.1, shuffle=False):
         self.dataset = dataset
-
-        dataset_size = len(dataset)
-        self.indices = list(range(dataset_size))
-        test_split = int(np.floor(test_train_split * dataset_size))
+        self.dataset_size = len(dataset)
+        self.indices = list(range(self.dataset_size))
+            
+        self.train_indices = []
+        self.val_indices = []
+        self.test_indices = []
+        
+        self.train_sampler = None
+        self.val_sampler = None
+        self.test_sampler = None
+        
+        self.train_loader = None
+        self.val_loader = None
+        self.test_loader = None
+        
+        if not restore:
+            self.split_for_train(test_train_split, val_train_split, shuffle)
+        else:
+            self.split_for_test()
+        
+    def split_for_train(self, test_train_split, val_train_split, shuffle):        
+        test_split = int(np.floor(test_train_split * self.dataset_size))
 
         if shuffle:
             np.random.shuffle(self.indices)
@@ -28,7 +46,11 @@ class DataSplitter:
         self.train_sampler = SubsetRandomSampler(self.train_indices)
         self.val_sampler = SubsetRandomSampler(self.val_indices)
         self.test_sampler = SubsetRandomSampler(self.test_indices)
-
+        
+    def split_for_test(self):        
+        self.test_sampler = SequentialSampler(self.dataset)
+        self.test_indices = self.dataset.test_indices
+    
     def get_train_split_point(self):
         return len(self.train_sampler) + len(self.val_indices)
 
@@ -37,8 +59,11 @@ class DataSplitter:
 
     def get_split(self, batch_size=50, num_workers=4):
         logging.debug('Initializing train-validation-test dataloaders')
-        self.train_loader = self.get_train_loader(batch_size=batch_size, num_workers=num_workers)
-        self.val_loader = self.get_validation_loader(batch_size=batch_size, num_workers=num_workers)
+        
+        if self.train_sampler != None and self.val_sampler != None:
+            self.train_loader = self.get_train_loader(batch_size=batch_size, num_workers=num_workers)
+            self.val_loader = self.get_validation_loader(batch_size=batch_size, num_workers=num_workers)
+        
         self.test_loader = self.get_test_loader(batch_size=batch_size, num_workers=num_workers)
         return self.train_loader, self.val_loader, self.test_loader
 
