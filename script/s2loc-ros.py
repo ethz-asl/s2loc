@@ -61,6 +61,7 @@ class S2LocNode(object):
         return np.reshape(cloud_arr, (cloud_msg.width,))
 
 if __name__ == "__main__":
+    print("=== Running S2Loc Node ====================")
     try:
         s2loc = S2LocNode("/ply_point_cloud")
         rospy.spin()
