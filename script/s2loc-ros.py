@@ -2,6 +2,7 @@ import numpy as np
 import rospy
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
+from controller import Controller
 
 DUMMY_FIELD_PREFIX = '__'
 
@@ -46,19 +47,25 @@ def fields_to_dtype(fields, point_step):
 class S2LocNode(object):
     def __init__(self, pt_topic):
         rospy.init_node('S2LocNode',anonymous=True)
+        self.ctrl = Controller()
+        print("Accepting incoming point clouds.")
         rospy.Subscriber(pt_topic, PointCloud2, self.laser_callback)
 
 
     def laser_callback(self, cloud_msg):
         cloud = self.__convert_msg_to_array(cloud_msg)
+
         print(f'received pc with size {cloud.size}  and shape {cloud.shape}')
+        print(f'cloud 0 {cloud[0].shape}')
+        print(f'cloud 0 value {cloud[0]}')
+        self.ctrl.handle_point_cloud(cloud_msg.header.stamp, cloud)
 
     def __convert_msg_to_array(self, cloud_msg):
         dtype_list = fields_to_dtype(cloud_msg.fields, cloud_msg.point_step)
         cloud_arr = np.fromstring(cloud_msg.data, dtype_list)
         cloud_arr = cloud_arr[
             [fname for fname, _type in dtype_list if not (fname[:len(DUMMY_FIELD_PREFIX)] == DUMMY_FIELD_PREFIX)]]
-        return np.reshape(cloud_arr, (cloud_msg.width,))
+        return np.reshape(cloud_arr, (cloud_msg.width * cloud_msg.height))
 
 if __name__ == "__main__":
     print("=== Running S2Loc Node ====================")
