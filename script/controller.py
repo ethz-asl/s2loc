@@ -1,4 +1,5 @@
 import sys
+import math
 import numpy as np
 from scipy import spatial
 
@@ -44,15 +45,24 @@ class Controller(object):
         all_candidates = []
         for idx in range(len(descriptors)):
             nn_dists, nn_indices = tree.query(descriptors[idx,:], p = p_norm, k = n_nearest_neighbors, distance_upper_bound = max_distance)
-            if nn_indices is None:
+            nn_dists, nn_indices = self.fix_nn_output(idx, nn_dists, nn_indices)
+            if not nn_indices or not nn_dists:
                 continue
-
             nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
+            print(f'Got distances {nn_dists}, with indices {nn_indices}')
             cand = LcCandidate(self.timestamps[nn_indices], self.clouds[nn_indices])
             all_candidates.append(cand)
 
-
         print("Finished loop closure lookup.")
+
+    def fix_nn_output(self, idx, nn_dists, nn_indices):
+        self_idx = nn_indices.index(idx)
+        del nn_indices[self_idx]
+        del nn_dists[self_idx]
+
+        fixed_nn_dists = [dists for dists in nn_dists if not (math.isnan(dists) or math.isinf(dists))]
+        fixed_nn_indices = [i for i in nn_indices if not (math.isnan(i) or math.isinf(i))]
+        return fixed_nn_dists, fixed_nn_indices
 
     def describe_all_point_clouds(self, clouds, bw):
         eval_set = EvaluationSet(clouds, bw)
@@ -60,9 +70,9 @@ class Controller(object):
 
         n_clouds = len(clouds)
         embeddings = np.empty(1)
-        for batch_idx, data in enumerate(val_loader):
+        for batch_idx, data in enumerate(loader):
             data = data.cuda().float()
-            embedded = net(data, data, data)
+            embedded, _, _ = self.net(data, data, data)
             embeddings = np.append(embeddings, embedded.cpu().data.numpy().reshape([1,-1]))
 
         descriptors = embeddings[1:].reshape([n_clouds, self.desc_size])
