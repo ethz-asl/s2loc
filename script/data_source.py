@@ -58,6 +58,7 @@ class DataSource:
         return dataset
 
     def loadPointCloudFromPath(self, path_to_point_cloud):
+        print(f'Reading PLY from {path_to_point_cloud}')
         plydata = PlyData.read(path_to_point_cloud)
         x = plydata['vertex']['x']
         y = plydata['vertex']['y']
@@ -75,7 +76,9 @@ class DataSource:
         self.start_cached = self.end_cached
         self.end_cached = min(self.ds_total_size, self.end_cached + self.cache)
         for idx in range(self.start_cached, self.end_cached):
-            dataset[idx] = self.loadPointCloudFromPath(ply_file)
+            self.anchors[idx] = self.loadPointCloudFromPath(self.anchors[idx])
+            self.positives[idx] = self.loadPointCloudFromPath(self.positives[idx])
+            self.negatives[idx] = self.loadPointCloudFromPath(self.negatives[idx])
         self.cached_batch = self.cached_batch + 1
 
     def free_to_start_cached(self):
@@ -83,16 +86,17 @@ class DataSource:
             dataset[idx] = self.all_files[idx]
 
     def get_cached(self):
-        return self.anchors[self.start_cached:self.end_cached],
-               self.positives[self.start_cached:self.end_cached],
+        return self.anchors[self.start_cached:self.end_cached], \
+               self.positives[self.start_cached:self.end_cached], \
                self.negatives[self.start_cached:self.end_cached]
 
 
 if __name__ == "__main__":
-    ds = DataSource("/mnt/data/datasets/Spherical/training-set", 10)
+    ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
     ds.load(100)
 
     a,p,n = ds.get_cached()
     print(f'len of initial cache {len(a)} of batch {ds.cached_batch}')
+    print("Caching next batch...")
     ds.cache_next()
     print(f'len of next cache {len(a)} of batch {ds.cached_batch}')
