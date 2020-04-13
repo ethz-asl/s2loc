@@ -23,21 +23,47 @@ class TrainingSet(torch.utils.data.Dataset):
         self.cache = data_source.cache
 
         if not restore:
-            (a,p,n) = (self.ds.anchors, self.ds.positives, self.ds.negatives)
+            (a,p,n) = self.ds.get_all_cached()
         else:
             (a,p,n) = self.__loadTestSet()
 
+        print(f'Size of cached: {len(a)}')
         self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(bw, a, p, n)
+        print(f'Size of cached2: {len(self.anchor_features)}')
 
     def __getitem__(self, index):
         # isinstance(l[1], str)
+        if (index >= self.ds.start_cached) and (index < self.ds.end_cached):
+            a, p, n = self.get_and_delete_torch_feature(index)
+            return a, p, n
+
+        # We reached the end of the current cached batch.
+        # Free the current set and cache the next one.
+        prev_end, end = ds.cache_next(index)
+        a, p, n = self.ds.get_cached(prev_end, end)
+        a, p, n = self.__genAllFeatures(self.bw, a, p, n)
+        print(f'Size before {len(self.anchor_features)}.')
+        print(f'Appending {len(a)} features.')
+        self.anchor_features.extend(a)
+        self.positive_features.extend(p)
+        self.negative_features.extend(n)
+        print(f'Total size {len(self.anchor_features)}.')
+
+        return self.get_and_delete_torch_feature(index)
+
+    def get_and_delete_torch_feature(self, index):
         anchor = torch.from_numpy(self.anchor_features[index])
         positive = torch.from_numpy(self.positive_features[index])
         negative = torch.from_numpy(self.negative_features[index])
+
+        self.anchor_features[index] = None
+        self.positive_features[index] = None
+        self.negative_features[index] = None
+
         return anchor, positive, negative
 
     def __len__(self):
-        return len(self.anchor_features)
+        return self.ds.ds_total_size
 
     def __genAllFeatures(self, bw, anchors, positives, negatives):
         n_ds = len(anchors)
@@ -48,7 +74,6 @@ class TrainingSet(torch.utils.data.Dataset):
         positive_features = process_map(partial(progresser, grid=grid), positives, max_workers=32)
         print("Generating negative spheres")
         negative_features = process_map(partial(progresser, grid=grid), negatives, max_workers=32)
-
 
         print("Generated features")
         return anchor_features, positive_features, negative_features
@@ -69,12 +94,24 @@ class TrainingSet(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
-    ds = DataSource('/home/berlukas/data/spherical/training-set')
+    cache = 10
+    ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
     ds.load(100)
+    ts = TrainingSet(ds, False)
+    print("Total length of trainining set:\t", ts.__len__())
 
-    ts = TrainingSet(ds)
     a,p,n = ts.__getitem__(0)
     print("First anchor:\t", a.shape)
     print("First positive:\t", p.shape)
     print("First negative:\t", n.shape)
-    print("Total length:\t", ts.__len__())
+
+    next_idx = cache + 5
+    a,p,n = ts.__getitem__(next_idx)
+    print(f"{next_idx}th anchor:\t", a.shape)
+    print(f"{next_idx}th positive:\t", p.shape)
+    print(f"{next_idx}th negative:\t", n.shape)
+
+    a,p,n = ts.__getitem__(1)
+    print("Second anchor:\t", a.shape)
+    print("Second positive:\t", p.shape)
+    print("Second negative:\t", n.shape)
