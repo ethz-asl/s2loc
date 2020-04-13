@@ -57,7 +57,6 @@ class DataSource:
         return dataset
 
     def loadPointCloudFromPath(self, path_to_point_cloud):
-        print(f'Reading PLY from {path_to_point_cloud}')
         plydata = PlyData.read(path_to_point_cloud)
         x = plydata['vertex']['x']
         y = plydata['vertex']['y']
@@ -66,14 +65,14 @@ class DataSource:
         return np.concatenate((x,y,z,i), axis=0).reshape(4, len(x)).transpose()
 
     def size(self):
-        return self.ds_total_size
+        return len(self.anchors)
 
     def __len__(self):
         return self.size()
 
     def cache_next(self, index):
         prev_end = self.end_cached
-        self.end_cached = min(self.ds_total_size, index+self.cache)
+        self.end_cached = min(self.size(), index+self.cache)
         for idx in range(prev_end, self.end_cached):
             self.anchors[idx], self.positives[idx], self.negatives[idx] = self.load_clouds_directly(idx)
         return prev_end, self.end_cached
@@ -97,6 +96,7 @@ class DataSource:
                self.negatives[start:end]
 
     def load_clouds_directly(self, idx):
+        print(f'Requisting direct index {idx} of size {len(self.anchors)}')
         anchor = self.loadPointCloudFromPath(self.anchors[idx]) if isinstance(self.anchors[idx], str) else self.anchors[idx]
         positive = self.loadPointCloudFromPath(self.positives[idx]) if isinstance(self.positives[idx], str) else self.positives[idx]
         negative = self.loadPointCloudFromPath(self.negatives[idx]) if isinstance(self.negatives[idx], str) else self.negatives[idx]

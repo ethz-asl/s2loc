@@ -43,9 +43,6 @@ from scipy import spatial
 # Load the dataset, project each point cloud on a sphere and derive a function for it.
 
 
-#ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
-ds = DataSource('/media/scratch/berlukas/spherical/training', 1.0)
-ds.load(10000)
 
 # ## Initialize the model and the training set
 
@@ -61,12 +58,17 @@ descriptor_size = 64
 bandwith = 100
 net_input_size = 2*bandwith
 n_features = 2
+cache = 50
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 writer = SummaryWriter()
 model_save = 'net_params_new_1.pkl'
-
 summary(net, input_size=[(2, 200, 200), (2, 200, 200), (2, 200, 200)])
 
+# ## Load the data
+
+ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
+#ds = DataSource('/media/scratch/berlukas/spherical/training', cache)
+ds.load(200)
 train_set = TrainingSet(ds, restore, bandwith)
 print("Total size: ", len(train_set))
 split = DataSplitter(train_set, restore, shuffle=True)

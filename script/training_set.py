@@ -27,9 +27,7 @@ class TrainingSet(torch.utils.data.Dataset):
         else:
             (a,p,n) = self.__loadTestSet()
 
-        print(f'Size of cached: {len(a)}')
         self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(bw, a, p, n)
-        print(f'Size of cached2: {len(self.anchor_features)}')
 
     def __getitem__(self, index):
         # isinstance(l[1], str)
@@ -39,16 +37,12 @@ class TrainingSet(torch.utils.data.Dataset):
 
         # We reached the end of the current cached batch.
         # Free the current set and cache the next one.
-        prev_end, end = ds.cache_next(index)
+        prev_end, end = self.ds.cache_next(index)
         a, p, n = self.ds.get_cached(prev_end, end)
         a, p, n = self.__genAllFeatures(self.bw, a, p, n)
-        print(f'Size before {len(self.anchor_features)}.')
-        print(f'Appending {len(a)} features.')
         self.anchor_features.extend(a)
         self.positive_features.extend(p)
         self.negative_features.extend(n)
-        print(f'Total size {len(self.anchor_features)}.')
-
         return self.get_and_delete_torch_feature(index)
 
     def get_and_delete_torch_feature(self, index):
