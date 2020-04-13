@@ -48,28 +48,29 @@ from scipy import spatial
 
 torch.cuda.set_device(0)
 torch.backends.cudnn.benchmark = True
-net = Model().cuda()
+bandwidth = 150
+net = Model(bandwidth).cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 50
 batch_size = 12
 num_workers = 12
 descriptor_size = 64
-bandwith = 100
-net_input_size = 2*bandwith
+net_input_size = 2*bandwidth
 n_features = 2
-cache = 50
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 writer = SummaryWriter()
 model_save = 'net_params_new_1.pkl'
-summary(net, input_size=[(2, 200, 200), (2, 200, 200), (2, 200, 200)])
+feature_dim = bandwidth * 2
+#summary(net, input_size=[(2, feature_dim, feature_dim), (2, feature_dim, feature_dim), (2, feature_dim, feature_dim)])
 
 # ## Load the data
 
-ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
-#ds = DataSource('/media/scratch/berlukas/spherical/training', cache)
-ds.load(200)
-train_set = TrainingSet(ds, restore, bandwith)
+cache = 10000
+#ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
+ds = DataSource('/media/scratch/berlukas/spherical/training', cache)
+ds.load(10000)
+train_set = TrainingSet(ds, restore, bandwidth)
 print("Total size: ", len(train_set))
 split = DataSplitter(train_set, restore, shuffle=True)
 

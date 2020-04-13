@@ -34,7 +34,7 @@ class TrainingSet(torch.utils.data.Dataset):
     def __getitem__(self, index):
         # isinstance(l[1], str)
         if (index >= self.ds.start_cached) and (index < self.ds.end_cached):
-            a, p, n = self.get_and_delete_torch_feature(index)
+            a, p, n = self.get_torch_feature(index)
             return a, p, n
 
         # We reached the end of the current cached batch.
@@ -51,6 +51,13 @@ class TrainingSet(torch.utils.data.Dataset):
         self.anchor_features[index] = None
         self.positive_features[index] = None
         self.negative_features[index] = None
+
+        return anchor, positive, negative
+
+    def get_torch_feature(self, index):
+        anchor = torch.from_numpy(self.anchor_features[index])
+        positive = torch.from_numpy(self.positive_features[index])
+        negative = torch.from_numpy(self.negative_features[index])
 
         return anchor, positive, negative
 
