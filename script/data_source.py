@@ -37,18 +37,18 @@ class DataSource:
         n_ds = min(n_files, n) if n > 0 else n_files
         dataset = [None] * n_ds
         for ply_file in all_files:
-            dataset[idx] = self.loadPointCloudFromPath(ply_file)        
+            dataset[idx] = self.loadPointCloudFromPath(ply_file)
             idx = idx + 1
             if n != -1 and idx >= n:
                 break
         return dataset
-    
+
     def loadDatasetPathOnly(self, path_to_dataset, n):
         all_files = sorted(glob.glob(path_to_dataset + '*.ply'))
         n_ds = min(n_files, n) if n > 0 else n_files
         dataset = all_files[:,n_ds]
         return dataset
-    
+
     def loadPointCloudFromPath(self, path_to_point_cloud):
         plydata = PlyData.read(path_to_point_cloud)
         x = plydata['vertex']['x']
