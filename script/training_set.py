@@ -20,6 +20,7 @@ class TrainingSet(torch.utils.data.Dataset):
         self.bw = bw
         self.is_restoring = restore
         self.test_indices = []
+        self.cache = data_source.cache
 
         if not restore:
             (a,p,n) = (self.ds.anchors, self.ds.positives, self.ds.negatives)
@@ -29,6 +30,7 @@ class TrainingSet(torch.utils.data.Dataset):
         self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(bw, a, p, n)
 
     def __getitem__(self, index):
+        # isinstance(l[1], str)
         anchor = torch.from_numpy(self.anchor_features[index])
         positive = torch.from_numpy(self.positive_features[index])
         negative = torch.from_numpy(self.negative_features[index])
@@ -51,17 +53,17 @@ class TrainingSet(torch.utils.data.Dataset):
         print("Generated features")
         return anchor_features, positive_features, negative_features
 
-    def __loadTestSet(self):        
+    def __loadTestSet(self):
         with open('test_indices.txt','rb') as f:
-            self.test_indices = np.loadtxt(f).astype(int)    
+            self.test_indices = np.loadtxt(f).astype(int)
             #import pdb; pdb.set_trace()
-            
+
             a = [self.ds.anchors[i] for i in self.test_indices]
             p = [self.ds.positives[i] for i in self.test_indices]
             n = [self.ds.negatives[i] for i in self.test_indices]
             return (a,p,n)
-            
-    
+
+
     def isRestoring(self):
         return self.is_restoring
 
