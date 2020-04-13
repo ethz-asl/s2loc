@@ -6,7 +6,7 @@ import torch
 
 from evaluation_set import EvaluationSet
 from model import Model
-
+from lc_candidate import LcCandidate
 
 class Controller(object):
     def __init__(self, bw = 100, state_dict = './net_params_new_1.pkl', desc_size = 64):
@@ -28,12 +28,29 @@ class Controller(object):
         self.timestamps.append(ts)
         self.clouds.append(cloud)
 
+    def clear_clouds(self):
+        self.timestamps = []
+        self.clouds = []
+
     def find_loop_closures(self):
         # build search tree
         print("Building all descriptors...")
         descriptors = self.describe_all_point_clouds(self.clouds, self.bw)
         print("Building the kd tree...")
         tree = spatial.KDTree(descriptors)
+        n_nearest_neighbors = 10
+        p_norm = 2
+        max_distance = 3
+        all_candidates = []
+        for idx in range(len(descriptors)):
+            nn_dists, nn_indices = tree.query(descriptors[idx,:], p = p_norm, k = n_nearest_neighbors, distance_upper_bound = max_distance)
+            if nn_indices is None:
+                continue
+
+            nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
+            cand = LcCandidate(self.timestamps[nn_indices], self.clouds[nn_indices])
+            all_candidates.append(cand)
+
 
         print("Finished loop closure lookup.")
 
