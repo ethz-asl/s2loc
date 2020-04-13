@@ -21,13 +21,15 @@ class TrainingSet(torch.utils.data.Dataset):
         self.is_restoring = restore
         self.test_indices = []
         self.cache = data_source.cache
+        self.grid = DHGrid.CreateGrid(bw)
+
 
         if not restore:
             (a,p,n) = self.ds.get_all_cached()
         else:
             (a,p,n) = self.__loadTestSet()
 
-        self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(bw, a, p, n)
+        self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(a, p, n)
 
     def __getitem__(self, index):
         # isinstance(l[1], str)
@@ -37,13 +39,9 @@ class TrainingSet(torch.utils.data.Dataset):
 
         # We reached the end of the current cached batch.
         # Free the current set and cache the next one.
-        prev_end, end = self.ds.cache_next(index)
-        a, p, n = self.ds.get_cached(prev_end, end)
-        a, p, n = self.__genAllFeatures(self.bw, a, p, n)
-        self.anchor_features.extend(a)
-        self.positive_features.extend(p)
-        self.negative_features.extend(n)
-        return self.get_and_delete_torch_feature(index)
+        a, p, n = self.ds.load_clouds_directly(index)
+        a, p, n = self.__gen_all_features_single(a, p, n)
+        return a, p, n
 
     def get_and_delete_torch_feature(self, index):
         anchor = torch.from_numpy(self.anchor_features[index])
@@ -57,19 +55,23 @@ class TrainingSet(torch.utils.data.Dataset):
         return anchor, positive, negative
 
     def __len__(self):
-        return self.ds.ds_total_size
+        return len(self.ds)
 
-    def __genAllFeatures(self, bw, anchors, positives, negatives):
-        n_ds = len(anchors)
-        grid = DHGrid.CreateGrid(bw)
+    def __genAllFeatures(self, anchors, positives, negatives):
         print("Generating anchor spheres")
-        anchor_features = process_map(partial(progresser, grid=grid), anchors, max_workers=32)
+        anchor_features = process_map(partial(progresser, grid=self.grid), anchors, max_workers=32)
         print("Generating positive spheres")
-        positive_features = process_map(partial(progresser, grid=grid), positives, max_workers=32)
+        positive_features = process_map(partial(progresser, grid=self.grid), positives, max_workers=32)
         print("Generating negative spheres")
-        negative_features = process_map(partial(progresser, grid=grid), negatives, max_workers=32)
+        negative_features = process_map(partial(progresser, grid=self.grid), negatives, max_workers=32)
 
         print("Generated features")
+        return anchor_features, positive_features, negative_features
+
+    def __gen_all_features_single(self, a, p, n):
+        anchor_features = progresser(a, self.grid)
+        positive_features = progresser(p, self.grid)
+        negative_features = progresser(n, self.grid)
         return anchor_features, positive_features, negative_features
 
     def __loadTestSet(self):
