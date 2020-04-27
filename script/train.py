@@ -48,28 +48,28 @@ from scipy import spatial
 
 torch.cuda.set_device(0)
 torch.backends.cudnn.benchmark = True
-bandwidth = 150
+bandwidth = 100
 net = Model(bandwidth).cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 50
 batch_size = 12
 num_workers = 12
-descriptor_size = 64
+descriptor_size = 128
 net_input_size = 2*bandwidth
 n_features = 2
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 writer = SummaryWriter()
 model_save = 'net_params_new_1.pkl'
 feature_dim = bandwidth * 2
-#summary(net, input_size=[(2, feature_dim, feature_dim), (2, feature_dim, feature_dim), (2, feature_dim, feature_dim)])
+summary(net, input_size=[(2, feature_dim, feature_dim), (2, feature_dim, feature_dim), (2, feature_dim, feature_dim)])
 
 # ## Load the data
 
-cache = 10000
+n_data = 12000
 #ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
-ds = DataSource('/media/scratch/berlukas/spherical/training', cache)
-ds.load(10000)
+ds = DataSource('/media/scratch/berlukas/spherical/training', n_data)
+ds.load(n_data)
 train_set = TrainingSet(ds, restore, bandwidth)
 print("Total size: ", len(train_set))
 split = DataSplitter(train_set, restore, shuffle=True)
@@ -167,72 +167,73 @@ def test(net, criterion, writer):
 
     n_iter = 0
     net.eval()
-    test_accs = AverageMeter()
-    test_pos_dist = AverageMeter()
-    test_neg_dist = AverageMeter()
-    anchor_embeddings = np.empty(1)
-    positive_embeddings = np.empty(1)
-    for batch_idx, (data1, data2, data3) in enumerate(test_loader):
-            embedded_a, embedded_p, embedded_n = net(data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
-            dist_to_pos, dist_to_neg, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
-            writer.add_scalar('Test/Loss', loss, n_iter)
+    with torch.no_grad():
+        test_accs = AverageMeter()
+        test_pos_dist = AverageMeter()
+        test_neg_dist = AverageMeter()
+        anchor_embeddings = np.empty(1)
+        positive_embeddings = np.empty(1)
+        for batch_idx, (data1, data2, data3) in enumerate(test_loader):
+                embedded_a, embedded_p, embedded_n = net(data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
+                dist_to_pos, dist_to_neg, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
+                writer.add_scalar('Test/Loss', loss, n_iter)
 
-            acc = accuracy(dist_to_pos, dist_to_neg)
-            test_accs.update(acc, data1.size(0))
-            test_pos_dist.update(dist_to_pos.cpu().data.numpy().sum())
-            test_neg_dist.update(dist_to_neg.cpu().data.numpy().sum())
+                acc = accuracy(dist_to_pos, dist_to_neg)
+                test_accs.update(acc, data1.size(0))
+                test_pos_dist.update(dist_to_pos.cpu().data.numpy().sum())
+                test_neg_dist.update(dist_to_neg.cpu().data.numpy().sum())
 
-            writer.add_scalar('Test/Accuracy', test_accs.avg, n_iter)
-            writer.add_scalar('Test/Distance/Positive', test_pos_dist.avg, n_iter)
-            writer.add_scalar('Test/Distance/Negative', test_neg_dist.avg, n_iter)
+                writer.add_scalar('Test/Accuracy', test_accs.avg, n_iter)
+                writer.add_scalar('Test/Distance/Positive', test_pos_dist.avg, n_iter)
+                writer.add_scalar('Test/Distance/Negative', test_neg_dist.avg, n_iter)
 
-            anchor_embeddings = np.append(anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1,-1]))
-            positive_embeddings = np.append(positive_embeddings, embedded_p.cpu().data.numpy().reshape([1,-1]))
-            n_iter = n_iter + 1
+                anchor_embeddings = np.append(anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1,-1]))
+                positive_embeddings = np.append(positive_embeddings, embedded_p.cpu().data.numpy().reshape([1,-1]))
+                n_iter = n_iter + 1
 
-    #import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
 
-    desc_anchors = anchor_embeddings[1:].reshape([test_size, descriptor_size])
-    desc_positives = positive_embeddings[1:].reshape([test_size, descriptor_size])
-    print(np.array(desc_positives).shape)
+        desc_anchors = anchor_embeddings[1:].reshape([test_size, descriptor_size])
+        desc_positives = positive_embeddings[1:].reshape([test_size, descriptor_size])
+        print(np.array(desc_positives).shape)
 
-    sys.setrecursionlimit(50000)
-    tree = spatial.KDTree(desc_positives)
-    p_norm = 2
-    max_pos_dist = 0.05
-    max_anchor_dist = 1
-    for n_nearest_neighbors in range(1,21):
-        pos_count = 0
-        anchor_count = 0
-        idx_count = 0
-        for idx in range(test_size):
-            nn_dists, nn_indices = tree.query(desc_anchors[idx,:], p = p_norm, k = n_nearest_neighbors)
-            nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
+        sys.setrecursionlimit(50000)
+        tree = spatial.KDTree(desc_positives)
+        p_norm = 2
+        max_pos_dist = 0.05
+        max_anchor_dist = 1
+        for n_nearest_neighbors in range(1,21):
+            pos_count = 0
+            anchor_count = 0
+            idx_count = 0
+            for idx in range(test_size):
+                nn_dists, nn_indices = tree.query(desc_anchors[idx,:], p = p_norm, k = n_nearest_neighbors)
+                nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
 
-            for nn_i in nn_indices:
-                if (nn_i >= test_size):
-                    break;
-                dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_positives[idx,:])
-                if (dist <= max_pos_dist):
-                    pos_count = pos_count + 1;
-                    break
-            for nn_i in nn_indices:
-                if (nn_i >= test_size):
-                    break;
-                dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_anchors[idx,:])
-                if (dist <= max_anchor_dist):
-                    anchor_count = anchor_count + 1;
-                    break
-            for nn_i in nn_indices:
-                if (nn_i == idx):
-                    idx_count = idx_count + 1;
-                    break
-        pos_precision = (pos_count*1.0) / test_size
-        anchor_precision = (anchor_count*1.0) / test_size
-        idx_precision = (idx_count*1.0) / test_size
-        writer.add_scalar('Test/Precision/Positive_Distance', pos_precision, n_nearest_neighbors)
-        writer.add_scalar('Test/Precision/Anchor_Distance', anchor_precision, n_nearest_neighbors)
-        writer.add_scalar('Test/Precision/Index_Count', idx_precision, n_nearest_neighbors)
+                for nn_i in nn_indices:
+                    if (nn_i >= test_size):
+                        break;
+                    dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_positives[idx,:])
+                    if (dist <= max_pos_dist):
+                        pos_count = pos_count + 1;
+                        break
+                for nn_i in nn_indices:
+                    if (nn_i >= test_size):
+                        break;
+                    dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_anchors[idx,:])
+                    if (dist <= max_anchor_dist):
+                        anchor_count = anchor_count + 1;
+                        break
+                for nn_i in nn_indices:
+                    if (nn_i == idx):
+                        idx_count = idx_count + 1;
+                        break
+            pos_precision = (pos_count*1.0) / test_size
+            anchor_precision = (anchor_count*1.0) / test_size
+            idx_precision = (idx_count*1.0) / test_size
+            writer.add_scalar('Test/Precision/Positive_Distance', pos_precision, n_nearest_neighbors)
+            writer.add_scalar('Test/Precision/Anchor_Distance', anchor_precision, n_nearest_neighbors)
+            writer.add_scalar('Test/Precision/Index_Count', idx_precision, n_nearest_neighbors)
 
 if not restore:
     train_iter = 0
@@ -257,6 +258,7 @@ else:
 ## Test
 
 print("Starting testing...")
+torch.cuda.empty_cache()
 test(net, criterion, writer)
 print("Testing finished!")
 writer.close()

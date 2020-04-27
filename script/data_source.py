@@ -18,9 +18,9 @@ class DataSource:
         self.all_negative_files = []
 
     def load(self, n = -1):
-        path_anchor = self.datasource + "/training_anchor/"
-        path_positives = self.datasource + "/training_positive/"
-        path_negatives = self.datasource + "/training_negative/"
+        path_anchor = self.datasource + "/anchor/"
+        path_positives = self.datasource + "/positive/"
+        path_negatives = self.datasource + "/negative/"
 
         print("Loading anchors from:\t", path_anchor)
         self.all_anchor_files = sorted(glob.glob(path_anchor + '*.ply'))
