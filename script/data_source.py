@@ -4,7 +4,7 @@ import numpy as np
 from os import listdir
 
 class DataSource:
-    def __init__(self, path_to_datasource, cache = -1):
+    def __init__(self, path_to_datasource, cache = -1, skip_nth=-1):
         self.datasource = path_to_datasource
         self.anchors = None
         self.positives = None
@@ -16,6 +16,7 @@ class DataSource:
         self.all_anchor_files = []
         self.all_positive_files = []
         self.all_negative_files = []
+        self.skip_nth = skip_nth
 
     def load(self, n = -1):
         path_anchor = self.datasource + "/anchor/"
@@ -40,14 +41,26 @@ class DataSource:
     def loadDataset(self, all_files, n, cache):
         idx = 0
         self.ds_total_size = len(all_files)
-        n_ds = min(self.ds_total_size, n) if n > 0 else self.ds_total_size
+        n_ds = min(self.ds_total_size, n) if n > 0 else self.ds_total_size        
         dataset = [None] * n_ds
+        skipping = 0        
+        n_iter = 0
         for ply_file in all_files:
+            n_iter = n_iter + 1
+            if n_iter > n:
+                break;
+                
+            if self.skip_nth != -1 and skipping > 0 and skipping <= self.skip_nth:
+                skipping = skipping + 1                
+                continue;
+                            
             dataset[idx] = self.loadPointCloudFromPath(ply_file) if idx < cache else ply_file
             idx = idx + 1
-            if n != -1 and idx >= n:
-                break
-        self.end_cached = cache
+            skipping = 1
+        self.end_cached = cache        
+        if self.skip_nth != -1:
+            dataset = list(filter(None.__ne__, dataset))        
+    
         return dataset
 
     def loadDatasetPathOnly(self, path_to_dataset, n):
@@ -61,7 +74,7 @@ class DataSource:
         x = plydata['vertex']['x']
         y = plydata['vertex']['y']
         z = plydata['vertex']['z']
-        i = plydata['vertex']['scalar']
+        i = plydata['vertex'][plydata.elements[0].properties[3].name]
         return np.concatenate((x,y,z,i), axis=0).reshape(4, len(x)).transpose()
 
     def size(self):

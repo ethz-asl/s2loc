@@ -53,7 +53,7 @@ net = Model(bandwidth).cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
 n_epochs = 50
-batch_size = 12
+batch_size = 15
 num_workers = 12
 descriptor_size = 128
 net_input_size = 2*bandwidth
