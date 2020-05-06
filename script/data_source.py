@@ -1,7 +1,6 @@
 from plyfile import PlyData, PlyElement
 import glob
 import numpy as np
-import open3d as o3d
 from os import listdir
 
 class DataSource:

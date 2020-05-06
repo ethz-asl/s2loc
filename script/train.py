@@ -9,7 +9,6 @@
 #
 
 from data_source import DataSource
-from visualize import Visualize
 from sphere import Sphere
 from model import Model
 from loss import TripletLoss, ImprovedTripletLoss
@@ -31,7 +30,6 @@ import time
 import math
 import numpy as np
 import pandas as pd
-import open3d as o3d
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from tqdm.auto import tqdm
@@ -44,37 +42,29 @@ from scipy import spatial
 
 
 #ds = DataSource('/home/berlukas/data/spherical/training-set', 1.0)
-ds = DataSource('/home/berlukas/data/spherical/training', 1.0)
-ds.load(5000)
+ds = DataSource('/cluster/work/riner/users/berlukas/training', 1.0)
+ds.load(7000)
 
 # ## Initialize the model and the training set
 
 
-torch.cuda.set_device(1)
+#torch.cuda.set_device(1)
 torch.backends.cudnn.benchmark = True
 net = Model().cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
-n_epochs = 20
-batch_size = 5 #14
+n_epochs = 30
+batch_size = 20
 num_workers = 1
-descriptor_size = 32
+descriptor_size = 64
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 
 result_save = 'triplet_result.txt'
 model_save = 'net_params_new_1.pkl'
 
-fp = open(result_save,'w')
-n_parameters = sum([p.data.nelement() for p in net.parameters()])
-fp.write('Number of params: {}\n'.format(n_parameters))
-fp.write('features: [2, 10, 16, 20, 60]\n')
-fp.write('bandwidths: [512, 50, 25, 15, 5]\n')
-fp.write('batch_size = 16\n')
-fp.write('training epoch: 20\n')
-fp.write('TripletLoss(margin=2.0\n')
 writer = SummaryWriter()
 
-bandwith = 100
+bandwith = 150
 train_set = TrainingSet(ds, bandwith)
 print("total set size: ", len(train_set))
 
@@ -259,4 +249,3 @@ print("Starting testing...")
 test(net, criterion, writer)
 print("Testing finished!")
 writer.close()
-fp.close()

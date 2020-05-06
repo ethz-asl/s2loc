@@ -1,7 +1,8 @@
 from data_source import DataSource
 from dh_grid import DHGrid
 import numpy as np
-import open3d as o3d
+from scipy import spatial
+import sys
 
 class Sphere:
     def __init__(self, point_cloud):
@@ -16,18 +17,18 @@ class Sphere:
         cart_sphere = self.__convertSphericalToEuclidean(self.sphere)
         cart_grid = DHGrid.ConvertGridToEuclidean(grid)
 
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(cart_sphere[:, 0:3])
-        pcd_tree = o3d.geometry.KDTreeFlann(pcd)
-
-        kNearestNeighbors = 1
+        sys.setrecursionlimit(50000)
+        sphere_tree = spatial.cKDTree(cart_sphere[:,0:3])
+        p_norm = 2
+        n_nearest_neighbors = 1
         features = np.zeros([2, grid.shape[1], grid.shape[2]])
         for i in range(grid.shape[1]):
             for j in range(grid.shape[2]):
-                [k, nn_idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[:, i, j], kNearestNeighbors)
-
+                nn_dists, nn_indices = sphere_tree.query(cart_grid[:, i, j], p = p_norm, k = n_nearest_neighbors)            
+                nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
+                
                 # TODO(lbern): Average over all neighbors
-                for cur_idx in nn_idx:
+                for cur_idx in nn_indices:
                     features[0, i, j] = self.ranges[cur_idx]
                     features[1, i, j] = self.intensity[cur_idx]
 
@@ -52,6 +53,8 @@ class Sphere:
         cart_sphere[:,0] = np.multiply(np.sin(spherical[:,0]), np.cos(spherical[:,1]))
         cart_sphere[:,1] = np.multiply(np.sin(spherical[:,0]), np.sin(spherical[:,1]))
         cart_sphere[:,2] = np.cos(spherical[:,0])
+        mask = np.isnan(cart_sphere)
+        cart_sphere[mask] = 0
         return cart_sphere
 
 
