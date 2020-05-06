@@ -3,6 +3,7 @@ from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
 import numpy as np
+import pandas as pd
 
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
@@ -94,7 +95,41 @@ class TrainingSet(torch.utils.data.Dataset):
 
     def isRestoring(self):
         return self.is_restoring
+    
+    def exportGeneratedFeatures(self, export_path):
+        n_features = len(self.anchor_features)
+        for i in tqdm(range(n_features)):
+            cloud = '{:015d}'.format(i+1)
+            anchor = self.anchor_features[i]
+            positive = self.positive_features[i]
+            negative = self.negative_features[i]
+            
+            d_anchor = {'intensities': list(anchor[0].flatten()), 'ranges': list(anchor[1].flatten())}
+            d_positive = {'intensities': list(positive[0].flatten()), 'ranges': list(positive[1].flatten())}
+            d_negative = {'intensities': list(negative[0].flatten()), 'ranges': list(negative[1].flatten())}
+            df_anchor = pd.DataFrame(d_anchor)
+            df_positive = pd.DataFrame(d_positive)
+            df_negative = pd.DataFrame(d_negative)                                    
 
+            df_anchor.to_csv(f'{export_path}/anchor/{cloud}.csv', index=False)
+            df_positive.to_csv(f'{export_path}/positive/{cloud}.csv', index=False)
+            df_negative.to_csv(f'{export_path}/negative/{cloud}.csv', index=False)
+    
+    def loadExportedFeatures(self, feature_path):
+        path_anchor = f'{feature_path}/anchor/*.csv'
+        path_positive = f'{feature_path}/positive/*.csv'
+        path_negative = f'{feature_path}/negative/*.csv'
+        all_anchor_features = sorted(glob.glob(path_anchor))
+        all_positive_features = sorted(glob.glob(path_anchor))
+        all_negative_features = sorted(glob.glob(path_anchor))
+        
+        n_features = len(all_anchor_features)
+        anchor_features = [None] * n_features
+        anchor_features = [None] * n_features
+        anchor_features = [None] * n_features
+        for i in tqdm(range(n_features)):
+            path_anchor_csv = all_anchor_features[i]
+            print("Path to anchor csv: ", path_anchor_csv)
 
 if __name__ == "__main__":
     cache = 10

@@ -76,6 +76,20 @@ class DataSource:
         z = plydata['vertex']['z']
         i = plydata['vertex'][plydata.elements[0].properties[3].name]
         return np.concatenate((x,y,z,i), axis=0).reshape(4, len(x)).transpose()
+    
+    def writePointCloudToPath(self, cloud, path_to_point_cloud):
+        types = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('i', 'f4')]
+        vertex = np.array(cloud, types)
+        import pdb; pdb.set_trace()
+        el = PlyElement.describe(vertex, 'vertex')
+        PlyData([el], text=True).write(path_to_point_cloud)
+        
+    def writeFeatureCloudToPath(self, cloud, path_to_point_cloud):
+        types = [('x', 'f4'), ('y', 'f4')]
+        vertex = np.array(cloud, types)        
+        import pdb; pdb.set_trace()
+        el = PlyElement.describe(vertex, 'vertex')
+        PlyData([el], text=True).write(path_to_point_cloud)
 
     def size(self):
         return len(self.anchors)
