@@ -4,77 +4,124 @@ import numpy as np
 from os import listdir
 
 class DataSource:
-    def __init__(self, path_to_datasource, training_split = 0.8):
+    def __init__(self, path_to_datasource, cache = -1, skip_nth=-1):
         self.datasource = path_to_datasource
-        self.anchors_training = None
-        self.positives_training = None
-        self.negatives_training = None
-        self.anchors_test = None
-        self.positives_test = None
-        self.negatives_test = None
-        self.ds_size = 0
-        self.training_split = training_split
+        self.anchors = None
+        self.positives = None
+        self.negatives = None
+        self.ds_total_size = 0
+        self.cache = cache
+        self.start_cached = 0
+        self.end_cached = 0
+        self.all_anchor_files = []
+        self.all_positive_files = []
+        self.all_negative_files = []
+        self.skip_nth = skip_nth
 
     def load(self, n = -1):
-        path_anchor = self.datasource + "/training_anchor/"
-        path_positives = self.datasource + "/training_positive/"
-        path_negatives = self.datasource + "/training_negative/"
+        path_anchor = self.datasource + "/anchor/"
+        path_positives = self.datasource + "/positive/"
+        path_negatives = self.datasource + "/negative/"
 
         print("Loading anchors from:\t", path_anchor)
-        anchors = self.loadDataset(path_anchor, n)
+        self.all_anchor_files = sorted(glob.glob(path_anchor + '*.ply'))
+        self.anchors = self.loadDataset(self.all_anchor_files, n, self.cache)
         print("Loading positives from:\t", path_positives)
-        positives = self.loadDataset(path_positives, n)
+        self.all_positive_files = sorted(glob.glob(path_positives + '*.ply'))
+        self.positives = self.loadDataset(self.all_positive_files, n, self.cache)
         print("Loading negatives from:\t", path_negatives)
-        negatives = self.loadDataset(path_negatives, n)
-
-        print("Splitting up training and testing data.")
-        self.splitDataset(anchors, positives, negatives)
+        self.all_negative_files = sorted(glob.glob(path_negatives + '*.ply'))
+        self.negatives = self.loadDataset(self.all_negative_files, n, self.cache)
 
         print("Done loading dataset.")
-        print(f"\tAnchors total: \t\t{len(anchors)}\t training/test: ({len(self.anchors_training)}/{len(self.anchors_test)})")
-        print(f"\tPositives total: \t{len(positives)}\t training/test: ({len(self.positives_training)}/{len(self.positives_test)})")
-        print(f"\tNegatives total: \t{len(negatives)}\t training/test: ({len(self.negatives_training)}/{len(self.negatives_test)})")
-        self.ds_size = len(self.anchors_training)
+        print(f"\tAnchors total: \t\t{len(self.anchors)}")
+        print(f"\tPositives total: \t{len(self.positives)}")
+        print(f"\tNegatives total: \t{len(self.negatives)}")
 
-    def loadDataset(self, path_to_dataset, n):
+    def loadDataset(self, all_files, n, cache):
         idx = 0
-        all_files = sorted(glob.glob(path_to_dataset + '*.ply'))
-        n_files = len(all_files)
-        n_ds = min(n_files, n) if n > 0 else n_files
+        self.ds_total_size = len(all_files)
+        n_ds = min(self.ds_total_size, n) if n > 0 else self.ds_total_size        
         dataset = [None] * n_ds
+        skipping = 0        
+        n_iter = 0
         for ply_file in all_files:
-            plydata = PlyData.read(ply_file)
-            #pcd = o3d.io.read_point_cloud(ply_file)
-            x = plydata['vertex']['x']
-            y = plydata['vertex']['y']
-            z = plydata['vertex']['z']
-            i = plydata['vertex']['scalar']
-            dataset[idx] = np.concatenate((x,y,z,i), axis=0).reshape(4, len(x)).transpose()
-            #dataset[idx] = np.asarray(pcd.points)
+            n_iter = n_iter + 1
+            if n_iter > n:
+                break;
+                
+            if self.skip_nth != -1 and skipping > 0 and skipping <= self.skip_nth:
+                skipping = skipping + 1                
+                continue;
+                            
+            dataset[idx] = self.loadPointCloudFromPath(ply_file) if idx < cache else ply_file
             idx = idx + 1
-            if n != -1 and idx >= n:
-                break
+            skipping = 1
+        self.end_cached = cache        
+        if self.skip_nth != -1:
+            dataset = list(filter(None.__ne__, dataset))        
+    
         return dataset
 
-    def splitDataset(self, anchors, positives, negatives):
-        n_total = len(anchors)
-        n_training = round(n_total * self.training_split)
+    def loadDatasetPathOnly(self, path_to_dataset, n):
+        all_files = sorted(glob.glob(path_to_dataset + '*.ply'))
+        n_ds = min(n_files, n) if n > 0 else n_files
+        dataset = all_files[:,n_ds]
+        return dataset
 
-        self.anchors_training = anchors[0:n_training]
-        self.anchors_test = anchors[n_training:n_total]
-
-        self.positives_training = positives[0:n_training]
-        self.positives_test = positives[n_training:n_total]
-
-        self.negatives_training = negatives[0:n_training]
-        self.negatives_test = negatives[n_training:n_total]
+    def loadPointCloudFromPath(self, path_to_point_cloud):
+        plydata = PlyData.read(path_to_point_cloud)
+        x = plydata['vertex']['x']
+        y = plydata['vertex']['y']
+        z = plydata['vertex']['z']
+        i = plydata['vertex'][plydata.elements[0].properties[3].name]
+        return np.concatenate((x,y,z,i), axis=0).reshape(4, len(x)).transpose()
 
     def size(self):
-        return self.ds_size
+        return len(self.anchors)
 
     def __len__(self):
         return self.size()
 
+    def cache_next(self, index):
+        prev_end = self.end_cached
+        self.end_cached = min(self.size(), index+self.cache)
+        for idx in range(prev_end, self.end_cached):
+            self.anchors[idx], self.positives[idx], self.negatives[idx] = self.load_clouds_directly(idx)
+        return prev_end, self.end_cached
+
+    def free_to_start_cached(self):
+        for idx in range(0, self.start_cached):
+            self.anchors[idx] = self.all_anchor_files[idx]
+            self.positives[idx] = self.all_positive_files[idx]
+            self.negatives[idx] = self.all_negative_files[idx]
+
+    def get_all_cached(self):
+        return self.get_cached(self.start_cached, self.end_cached)
+
+    def get_cached(self, start, end):
+        assert start <= end
+        start = max(0, start)
+        end = min(self.ds_total_size, end)
+
+        return self.anchors[start:end], \
+               self.positives[start:end], \
+               self.negatives[start:end]
+
+    def load_clouds_directly(self, idx):
+        print(f'Requisting direct index {idx} of size {len(self.anchors)}')
+        anchor = self.loadPointCloudFromPath(self.anchors[idx]) if isinstance(self.anchors[idx], str) else self.anchors[idx]
+        positive = self.loadPointCloudFromPath(self.positives[idx]) if isinstance(self.positives[idx], str) else self.positives[idx]
+        negative = self.loadPointCloudFromPath(self.negatives[idx]) if isinstance(self.negatives[idx], str) else self.negatives[idx]
+        return anchor, positive, negative
+
 if __name__ == "__main__":
-    ds = DataSource("/mnt/data/datasets/Spherical/training-set")
-    ds.load()
+    ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
+    ds.load(100)
+
+    a,p,n = ds.get_all_cached()
+    print(f'len of initial cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')
+    print("Caching next batch...")
+    ds.cache_next(25)
+    a,p,n = ds.get_all_cached()
+    print(f'len of next cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')

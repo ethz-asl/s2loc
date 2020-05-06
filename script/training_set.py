@@ -2,6 +2,7 @@ import torch.utils.data
 from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
+import numpy as np
 
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
@@ -14,52 +15,106 @@ def progresser(sample, grid, auto_position=True, write_safe=False, blocking=True
     return sample_sphere.sampleUsingGrid(grid)
 
 class TrainingSet(torch.utils.data.Dataset):
-    def __init__(self, data_source, bw=100, training=True):
+    def __init__(self, data_source, restore, bw=100):
         self.ds = data_source
         self.bw = bw
-        self.is_training = training
+        self.is_restoring = restore
+        self.test_indices = []
+        self.cache = data_source.cache
+        self.grid = DHGrid.CreateGrid(bw)
 
-        if training:
-            (a,p,n) = (self.ds.anchors_training, self.ds.positives_training, self.ds.negatives_training)
+
+        if not restore:
+            (a,p,n) = self.ds.get_all_cached()
         else:
-            (a,p,n) = (self.ds.anchors_test, self.ds.positives_test, self.ds.negatives_test)
+            (a,p,n) = self.__loadTestSet()
 
-        self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(bw, a, p, n)
+        self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(a, p, n)
 
     def __getitem__(self, index):
+        # isinstance(l[1], str)
+        if (index >= self.ds.start_cached) and (index < self.ds.end_cached):
+            a, p, n = self.get_torch_feature(index)
+            return a, p, n
+
+        # We reached the end of the current cached batch.
+        # Free the current set and cache the next one.
+        a, p, n = self.ds.load_clouds_directly(index)
+        a, p, n = self.__gen_all_features_single(a, p, n)
+        return a, p, n
+
+    def get_and_delete_torch_feature(self, index):
         anchor = torch.from_numpy(self.anchor_features[index])
         positive = torch.from_numpy(self.positive_features[index])
         negative = torch.from_numpy(self.negative_features[index])
+
+        self.anchor_features[index] = None
+        self.positive_features[index] = None
+        self.negative_features[index] = None
+
+        return anchor, positive, negative
+
+    def get_torch_feature(self, index):
+        anchor = torch.from_numpy(self.anchor_features[index])
+        positive = torch.from_numpy(self.positive_features[index])
+        negative = torch.from_numpy(self.negative_features[index])
+
         return anchor, positive, negative
 
     def __len__(self):
         return len(self.ds)
 
-    def __genAllFeatures(self, bw, anchors, positives, negatives):
-        n_ds = len(anchors)
-        grid = DHGrid.CreateGrid(bw)
+    def __genAllFeatures(self, anchors, positives, negatives):
         print("Generating anchor spheres")
-        anchor_features = process_map(partial(progresser, grid=grid), anchors, max_workers=32)
+        anchor_features = process_map(partial(progresser, grid=self.grid), anchors, max_workers=32)
         print("Generating positive spheres")
-        positive_features = process_map(partial(progresser, grid=grid), positives, max_workers=32)
+        positive_features = process_map(partial(progresser, grid=self.grid), positives, max_workers=32)
         print("Generating negative spheres")
-        negative_features = process_map(partial(progresser, grid=grid), negatives, max_workers=32)
-
+        negative_features = process_map(partial(progresser, grid=self.grid), negatives, max_workers=32)
 
         print("Generated features")
         return anchor_features, positive_features, negative_features
 
-    def isTraining(self):
-        return self.is_training
+    def __gen_all_features_single(self, a, p, n):
+        anchor_features = progresser(a, self.grid)
+        positive_features = progresser(p, self.grid)
+        negative_features = progresser(n, self.grid)
+        return anchor_features, positive_features, negative_features
+
+    def __loadTestSet(self):
+        with open('test_indices.txt','rb') as f:
+            self.test_indices = np.loadtxt(f).astype(int)
+            #import pdb; pdb.set_trace()
+
+            a = [self.ds.anchors[i] for i in self.test_indices]
+            p = [self.ds.positives[i] for i in self.test_indices]
+            n = [self.ds.negatives[i] for i in self.test_indices]
+            return (a,p,n)
+
+
+    def isRestoring(self):
+        return self.is_restoring
 
 
 if __name__ == "__main__":
-    ds = DataSource('/home/berlukas/data/spherical/training-set')
+    cache = 10
+    ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
     ds.load(100)
+    ts = TrainingSet(ds, False)
+    print("Total length of trainining set:\t", ts.__len__())
 
-    ts = TrainingSet(ds)
     a,p,n = ts.__getitem__(0)
     print("First anchor:\t", a.shape)
     print("First positive:\t", p.shape)
     print("First negative:\t", n.shape)
-    print("Total length:\t", ts.__len__())
+
+    next_idx = cache + 5
+    a,p,n = ts.__getitem__(next_idx)
+    print(f"{next_idx}th anchor:\t", a.shape)
+    print(f"{next_idx}th positive:\t", p.shape)
+    print(f"{next_idx}th negative:\t", n.shape)
+
+    a,p,n = ts.__getitem__(1)
+    print("Second anchor:\t", a.shape)
+    print("Second positive:\t", p.shape)
+    print("Second negative:\t", n.shape)
