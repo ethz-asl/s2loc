@@ -16,6 +16,7 @@ class DataSource:
         self.cache = cache
         self.start_cached = 0
         self.end_cached = 0
+        self.skip_nth = skip_nth
         self.all_anchor_files = []
         self.all_anchor_image_files = []
         self.all_positive_files = []
@@ -126,6 +127,7 @@ class DataSource:
         self.end_cached = min(self.size(), index+self.cache)
         for idx in range(prev_end, self.end_cached):
             self.anchors[idx], self.positives[idx], self.negatives[idx] = self.load_clouds_directly(idx)
+            self.anchor_sph_images[idx], self.positive_sph_images[idx], self.negative_sph_images[idx] = self.load_images_directly(idx)
         return prev_end, self.end_cached
 
     def free_to_start_cached(self):
@@ -133,11 +135,14 @@ class DataSource:
             self.anchors[idx] = self.all_anchor_files[idx]
             self.positives[idx] = self.all_positive_files[idx]
             self.negatives[idx] = self.all_negative_files[idx]
+            self.anchor_sph_images[idx] = self.all_anchor_image_files[idx]
+            self.positive_sph_images[idx] = self.all_positive_image_files[idx]
+            self.negative_sph_images[idx] = self.all_negative_image_files[idx]
 
-    def get_all_cached(self):
-        return self.get_cached(self.start_cached, self.end_cached)
+    def get_all_cached_clouds(self):
+        return self.get_cached_clouds(self.start_cached, self.end_cached)
 
-    def get_cached(self, start, end):
+    def get_cached_clouds(self, start, end):
         assert start <= end
         start = max(0, start)
         end = min(self.ds_total_size, end)
@@ -146,6 +151,17 @@ class DataSource:
                self.positives[start:end], \
                self.negatives[start:end]
 
+    def get_all_cached_images(self):
+        return self.get_cached_images(self.start_cached, self.end_cached)
+
+    def get_cached_images(self, start, end):
+        assert start <= end
+        start = max(0, start)
+        end = min(self.ds_total_size, end)
+        return self.anchor_sph_images[start:end], \
+               self.positive_sph_images[start:end], \
+               self.negative_sph_images[start:end]
+
     def load_clouds_directly(self, idx):
         print(f'Requesting direct index {idx} of size {len(self.anchors)}')
         anchor = self.loadPointCloudFromPath(self.anchors[idx]) if isinstance(self.anchors[idx], str) else self.anchors[idx]
@@ -153,14 +169,23 @@ class DataSource:
         negative = self.loadPointCloudFromPath(self.negatives[idx]) if isinstance(self.negatives[idx], str) else self.negatives[idx]
         return anchor, positive, negative
 
+    def load_images_directly(self, idx):
+        print(f'Requesting direct index {idx} of size {len(self.anchors)}')
+        anchor = self.loadPointCloudFromPath(self.anchor_sph_images[idx]) if isinstance(self.anchor_sph_images[idx], str) else self.anchor_sph_images[idx]
+        positive = self.loadPointCloudFromPath(self.positive_sph_images[idx]) if isinstance(self.positive_sph_images[idx], str) else self.positive_sph_images[idx]
+        negative = self.loadPointCloudFromPath(self.negative_sph_images[idx]) if isinstance(self.negative_sph_images[idx], str) else self.negative_sph_images[idx]
+        return anchor, positive, negative
+
 if __name__ == "__main__":
     #ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
     ds = DataSource("/tmp/training", 10)
-    ds.load(100)
+    ds.load(10)
 
-    a,p,n = ds.get_all_cached()
+    a,p,n = ds.get_all_cached_clouds()
     print(f'len of initial cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')
     print("Caching next batch...")
     ds.cache_next(25)
-    a,p,n = ds.get_all_cached()
+    a,p,n = ds.get_all_cached_clouds()
     print(f'len of next cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')
+    a_img, p_img, n_img = ds.get_all_cached_images()
+    print(f'anchor image shape {a_img[0].shape}')

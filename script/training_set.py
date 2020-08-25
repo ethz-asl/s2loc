@@ -3,7 +3,6 @@ from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
 import numpy as np
-import pandas as pd
 
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
@@ -24,30 +23,63 @@ class TrainingSet(torch.utils.data.Dataset):
         self.cache = data_source.cache
         self.grid = DHGrid.CreateGrid(bw)
 
-
+        # Generate features from clouds.
         if not restore:
-            (a,p,n) = self.ds.get_all_cached()
+            (a,p,n) = self.ds.get_all_cached_clouds()
         else:
             (a,p,n) = self.__loadTestSet()
-
-        self.anchor_features = np.zeros((2, 2*bw, 2*bw))
-        self.positive_features = np.zeros((2, 2*bw, 2*bw))
-        self.negative_features = np.zeros((2, 2*bw, 2*bw))
-        
         a_pcl_features, p_pcl_features, n_pcl_features = self.__genAllCloudFeatures(a, p, n)
-        
+
+        # Copy all features to the data structure.
+        double_bw = 2*bw
+        n_clouds = self.ds.size()
+        self.anchor_features = [np.zeros((3, double_bw, double_bw))]*n_clouds
+        self.positive_features = [np.zeros((3, double_bw, double_bw))]*n_clouds
+        self.negative_features = [np.zeros((3, double_bw, double_bw))]*n_clouds
+
+        a_img_features, p_img_features, n_img_features = self.ds.get_all_cached_images()
+        for i in range(self.ds.start_cached, self.ds.end_cached):
+            self.anchor_features[i], self.positive_features[i], self.negative_features[i] = self.createFeature(a_pcl_features[i], a_img_features[i], p_pcl_features[i], p_img_features[i], n_pcl_features[i], n_img_features[i])
 
     def __getitem__(self, index):
         # isinstance(l[1], str)
         if (index >= self.ds.start_cached) and (index < self.ds.end_cached):
-            a, p, n = self.get_torch_feature(index)
+            a, p, n = self.get_and_delete_torch_feature(index)
             return a, p, n
 
         # We reached the end of the current cached batch.
         # Free the current set and cache the next one.
-        a, p, n = self.ds.load_clouds_directly(index)
-        a, p, n = self.__gen_all_features_single(a, p, n)
+        a_cloud, p_cloud, n_cloud = self.ds.load_clouds_directly(index)
+        a_cloud, p_cloud, n_cloud = self.__gen_all_features_single(a_cloud, p_cloud, n_cloud)
+        a_img, p_img, n_img = self.ds.load_images_directly(index)
+
+        a, p, n = self.createFeature(a_cloud, a_img, p_cloud, p_img, n_cloud, n_img)
+
         return a, p, n
+
+    def createFeature(self, a_cloud, a_img, p_cloud, p_img, n_cloud, n_img):
+        double_bw = 2*self.bw
+        anchor_features = np.zeros((3, double_bw, double_bw))
+        positive_features = np.zeros((3, double_bw, double_bw))
+        negative_features = np.zeros((3, double_bw, double_bw))
+
+        a_img_feat = np.reshape(a_img.transpose(), (4, double_bw, double_bw))
+        anchor_features[0, :, :] = a_cloud[0, :, :]
+        anchor_features[1, :, :] = a_cloud[1, :, :]
+        anchor_features[2, :, :] = a_img_feat[3, :, :]
+
+        p_img_feat = np.reshape(p_img.transpose(), (4, double_bw, double_bw))
+        positive_features[0, :, :] = p_cloud[0, :, :]
+        positive_features[1, :, :] = p_cloud[1, :, :]
+        positive_features[2, :, :] = p_img_feat[3, :, :]
+
+        n_img_feat = np.reshape(n_img.transpose(), (4, double_bw, double_bw))
+        negative_features[0, :, :] = n_cloud[0, :, :]
+        negative_features[1, :, :] = n_cloud[1, :, :]
+        negative_features[2, :, :] = n_img_feat[3, :, :]
+
+        return anchor_features, positive_features, negative_features
+
 
     def get_and_delete_torch_feature(self, index):
         anchor = torch.from_numpy(self.anchor_features[index])
@@ -57,13 +89,6 @@ class TrainingSet(torch.utils.data.Dataset):
         self.anchor_features[index] = None
         self.positive_features[index] = None
         self.negative_features[index] = None
-
-        return anchor, positive, negative
-
-    def get_torch_feature(self, index):
-        anchor = torch.from_numpy(self.anchor_features[index])
-        positive = torch.from_numpy(self.positive_features[index])
-        negative = torch.from_numpy(self.negative_features[index])
 
         return anchor, positive, negative
 
@@ -100,45 +125,12 @@ class TrainingSet(torch.utils.data.Dataset):
 
     def isRestoring(self):
         return self.is_restoring
-    
-    def exportGeneratedFeatures(self, export_path):
-        n_features = len(self.anchor_features)
-        for i in tqdm(range(n_features)):
-            cloud = '{:015d}'.format(i+1)
-            anchor = self.anchor_features[i]
-            positive = self.positive_features[i]
-            negative = self.negative_features[i]
-            
-            d_anchor = {'intensities': list(anchor[0].flatten()), 'ranges': list(anchor[1].flatten())}
-            d_positive = {'intensities': list(positive[0].flatten()), 'ranges': list(positive[1].flatten())}
-            d_negative = {'intensities': list(negative[0].flatten()), 'ranges': list(negative[1].flatten())}
-            df_anchor = pd.DataFrame(d_anchor)
-            df_positive = pd.DataFrame(d_positive)
-            df_negative = pd.DataFrame(d_negative)                                    
 
-            df_anchor.to_csv(f'{export_path}/anchor/{cloud}.csv', index=False)
-            df_positive.to_csv(f'{export_path}/positive/{cloud}.csv', index=False)
-            df_negative.to_csv(f'{export_path}/negative/{cloud}.csv', index=False)
-    
-    def loadExportedFeatures(self, feature_path):
-        path_anchor = f'{feature_path}/anchor/*.csv'
-        path_positive = f'{feature_path}/positive/*.csv'
-        path_negative = f'{feature_path}/negative/*.csv'
-        all_anchor_features = sorted(glob.glob(path_anchor))
-        all_positive_features = sorted(glob.glob(path_anchor))
-        all_negative_features = sorted(glob.glob(path_anchor))
-        
-        n_features = len(all_anchor_features)
-        anchor_features = [None] * n_features
-        anchor_features = [None] * n_features
-        anchor_features = [None] * n_features
-        for i in tqdm(range(n_features)):
-            path_anchor_csv = all_anchor_features[i]
-            print("Path to anchor csv: ", path_anchor_csv)
 
 if __name__ == "__main__":
     cache = 10
-    ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
+    #ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
+    ds = DataSource("/tmp/training", 10)
     ds.load(100)
     ts = TrainingSet(ds, False)
     print("Total length of trainining set:\t", ts.__len__())

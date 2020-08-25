@@ -11,10 +11,10 @@ class Sphere:
         self.point_cloud = point_cloud
         (self.sphere, self.ranges) = self.__projectPointCloudOnSphere(point_cloud)
         self.intensity = point_cloud[:,3]
-        
+
     def getProjectedInCartesian(self):
         return self.__convertSphericalToEuclidean(self.sphere)
-    
+
     def sampleUsingGrid(self, grid):
         cart_sphere = self.__convertSphericalToEuclidean(self.sphere)
         cart_grid = DHGrid.ConvertGridToEuclidean(grid)
@@ -24,7 +24,7 @@ class Sphere:
         pcd_tree = o3d.geometry.KDTreeFlann(pcd)
 
         kNearestNeighbors = 1
-        features = np.zeros([2, grid.shape[1], grid.shape[2]])
+        features = np.zeros((2, grid.shape[1], grid.shape[2]))
         for i in range(grid.shape[1]):
             for j in range(grid.shape[2]):
                 [k, nn_idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[:, i, j], kNearestNeighbors)
@@ -35,7 +35,7 @@ class Sphere:
                     features[1, i, j] = self.intensity[cur_idx]
 
         return features
-    
+
     def sampleUsingGrid2(self, grid):
         cart_sphere = self.__convertSphericalToEuclidean(self.sphere)
         cart_grid = DHGrid.ConvertGridToEuclidean(grid)
@@ -44,12 +44,12 @@ class Sphere:
         sphere_tree = spatial.cKDTree(cart_sphere[:,0:3])
         p_norm = 2
         n_nearest_neighbors = 1
-        features = np.zeros([2, grid.shape[1], grid.shape[2]])
+        features = np.zeros((2, grid.shape[1], grid.shape[2]))
         for i in range(grid.shape[1]):
             for j in range(grid.shape[2]):
-                nn_dists, nn_indices = sphere_tree.query(cart_grid[:, i, j], p = p_norm, k = n_nearest_neighbors)            
+                nn_dists, nn_indices = sphere_tree.query(cart_grid[:, i, j], p = p_norm, k = n_nearest_neighbors)
                 nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
-                
+
                 # TODO(lbern): Average over all neighbors
                 for cur_idx in nn_indices:
                     features[0, i, j] = self.ranges[cur_idx]
@@ -81,7 +81,7 @@ class Sphere:
         mask = np.isnan(cart_sphere)
         cart_sphere[mask] = 0
         return cart_sphere
-    
+
     def __convertEuclideanToSpherical(self, euclidean):
       sphere = np.zeros([len(euclidean), 2])
       dist = np.sqrt(np.power(sph_image_cart[:,1],2) + np.power(sph_image_cart[:,2],2) + np.power(sph_image_cart[:,3],2))
