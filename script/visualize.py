@@ -21,16 +21,19 @@ class Visualize:
     def visualizeSphere(self, sphere, jupyter = False):
         pcd = o3d.geometry.PointCloud()
         cart_sphere = sphere.getProjectedInCartesian()
+        self.visualizeCartesianSphere(np.column_stack((cart_sphere, sphere.intensity)))
+
+    def visualizeCartesianSphere(self, cart_sphere, jupyter = False):
+        pcd = o3d.geometry.PointCloud()        
         pcd.points = o3d.utility.Vector3dVector(cart_sphere[:, 0:3])
-        colors = self.__mapIntensityToRGB(sphere.intensity)
+        colors = self.__mapIntensityToRGB(cart_sphere[:,3])
         pcd.colors = o3d.utility.Vector3dVector(colors[:,0:3])
 
         if jupyter:
             self.__visualizeJupyter(pcd)
         else:
             o3d.visualization.draw_geometries([pcd])
-
-
+            
     def __visualizeJupyter(self, pcd):
         visualizer = o3d.JVisualizer()
         visualizer.add_geometry(pcd)

@@ -11,7 +11,7 @@ class Sphere:
         self.point_cloud = point_cloud
         (self.sphere, self.ranges) = self.__projectPointCloudOnSphere(point_cloud)
         self.intensity = point_cloud[:,3]
-
+        
     def getProjectedInCartesian(self):
         return self.__convertSphericalToEuclidean(self.sphere)
     
@@ -61,6 +61,8 @@ class Sphere:
     def __projectPointCloudOnSphere(self, cloud):
         # sqrt(x^2+y^2+z^2)
         dist = np.sqrt(cloud[:,0]**2 + cloud[:,1]**2 + cloud[:,2]**2)
+        #dist = np.sqrt(np.power(sph_image_cart[:,0],2) + np.power(sph_image_cart[:,1],2) + np.power(sph_image_cart[:,2],2))
+
         projected = np.empty([len(cloud), 3])
         ranges = np.empty([len(cloud), 1])
 
@@ -79,9 +81,11 @@ class Sphere:
         mask = np.isnan(cart_sphere)
         cart_sphere[mask] = 0
         return cart_sphere
-
-
-
+    
+    def __convertEuclideanToSpherical(self, euclidean):
+      sphere = np.zeros([len(euclidean), 2])
+      dist = np.sqrt(np.power(sph_image_cart[:,1],2) + np.power(sph_image_cart[:,2],2) + np.power(sph_image_cart[:,3],2))
+      sphere[:,0] = np.arccos()
 
 if __name__ == "__main__":
     ds = DataSource("/media/scratch/berlukas/spherical/training")

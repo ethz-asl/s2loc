@@ -30,7 +30,12 @@ class TrainingSet(torch.utils.data.Dataset):
         else:
             (a,p,n) = self.__loadTestSet()
 
-        self.anchor_features, self.positive_features, self.negative_features = self.__genAllFeatures(a, p, n)
+        self.anchor_features = np.zeros((2, 2*bw, 2*bw))
+        self.positive_features = np.zeros((2, 2*bw, 2*bw))
+        self.negative_features = np.zeros((2, 2*bw, 2*bw))
+        
+        a_pcl_features, p_pcl_features, n_pcl_features = self.__genAllCloudFeatures(a, p, n)
+        
 
     def __getitem__(self, index):
         # isinstance(l[1], str)
@@ -65,7 +70,7 @@ class TrainingSet(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.ds)
 
-    def __genAllFeatures(self, anchors, positives, negatives):
+    def __genAllCloudFeatures(self, anchors, positives, negatives):
         print("Generating anchor spheres")
         anchor_features = process_map(partial(progresser, grid=self.grid), anchors, max_workers=32)
         print("Generating positive spheres")
