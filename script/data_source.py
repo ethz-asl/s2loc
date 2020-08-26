@@ -1,10 +1,13 @@
-from plyfile import PlyData, PlyElement
 import glob
-import numpy as np
 from os import listdir
 
+import numpy as np
+
+from plyfile import PlyData, PlyElement
+
+
 class DataSource:
-    def __init__(self, path_to_datasource, cache = -1, skip_nth=-1):
+    def __init__(self, path_to_datasource, cache=-1, skip_nth=-1):
         self.datasource = path_to_datasource
         self.anchors = None
         self.anchor_sph_images = None
@@ -24,7 +27,7 @@ class DataSource:
         self.all_negative_files = []
         self.all_negative_image_files = []
 
-    def load(self, n = -1):
+    def load(self, n=-1):
         path_anchor = self.datasource + "/training_anchor_pointclouds/"
         path_anchor_images = self.datasource + "/training_anchor_sph_images/"
         path_positives = self.datasource + "/training_positive_pointclouds/"
@@ -35,18 +38,26 @@ class DataSource:
         print(f"Loading anchors from:\t{path_anchor} and {path_anchor_images}")
         self.all_anchor_files = sorted(glob.glob(path_anchor + '*.ply'))
         self.anchors = self.loadDataset(self.all_anchor_files, n, self.cache)
-        self.all_anchor_image_files = sorted(glob.glob(path_anchor_images + '*.ply'))
-        self.anchor_sph_images = self.loadDataset(self.all_anchor_image_files, n, self.cache)
+        self.all_anchor_image_files = sorted(
+            glob.glob(path_anchor_images + '*.ply'))
+        self.anchor_sph_images = self.loadDataset(
+            self.all_anchor_image_files, n, self.cache)
         print(f"Loading positives from:\t{path_positives} and {path_positive_images}")
         self.all_positive_files = sorted(glob.glob(path_positives + '*.ply'))
-        self.positives = self.loadDataset(self.all_positive_files, n, self.cache)
-        self.all_positive_image_files = sorted(glob.glob(path_positive_images + '*.ply'))
-        self.positive_sph_images = self.loadDataset(self.all_positive_image_files, n, self.cache)
+        self.positives = self.loadDataset(
+            self.all_positive_files, n, self.cache)
+        self.all_positive_image_files = sorted(
+            glob.glob(path_positive_images + '*.ply'))
+        self.positive_sph_images = self.loadDataset(
+            self.all_positive_image_files, n, self.cache)
         print(f"Loading negatives from:\t{path_negatives} and {path_negative_images}")
         self.all_negative_files = sorted(glob.glob(path_negatives + '*.ply'))
-        self.negatives = self.loadDataset(self.all_negative_files, n, self.cache)
-        self.all_negative_image_files = sorted(glob.glob(path_negative_images + '*.ply'))
-        self.negative_sph_images = self.loadDataset(self.all_negative_image_files, n, self.cache)
+        self.negatives = self.loadDataset(
+            self.all_negative_files, n, self.cache)
+        self.all_negative_image_files = sorted(
+            glob.glob(path_negative_images + '*.ply'))
+        self.negative_sph_images = self.loadDataset(
+            self.all_negative_image_files, n, self.cache)
 
         print("Done loading dataset.")
         print(f"\tAnchor point clouds total: \t{len(self.anchors)}")
@@ -66,13 +77,14 @@ class DataSource:
         for ply_file in all_files:
             n_iter = n_iter + 1
             if n_iter > n:
-                break;
+                break
 
             if self.skip_nth != -1 and skipping > 0 and skipping <= self.skip_nth:
                 skipping = skipping + 1
-                continue;
+                continue
 
-            dataset[idx] = self.loadPointCloudFromPath(ply_file) if idx < cache else ply_file
+            dataset[idx] = self.loadPointCloudFromPath(
+                ply_file) if idx < cache else ply_file
             idx = idx + 1
             skipping = 1
         self.end_cached = cache
@@ -84,7 +96,7 @@ class DataSource:
     def loadDatasetPathOnly(self, path_to_dataset, n):
         all_files = sorted(glob.glob(path_to_dataset + '*.ply'))
         n_ds = min(n_files, n) if n > 0 else n_files
-        dataset = all_files[:,n_ds]
+        dataset = all_files[:, n_ds]
         return dataset
 
     def loadPointCloudFromPath(self, path_to_point_cloud):
@@ -100,19 +112,21 @@ class DataSource:
         else:
             i = plydata['vertex'][plydata.elements[0].properties[3].name]
 
-        return np.concatenate((x,y,z,i), axis=0).reshape(4, len(x)).transpose()
+        return np.concatenate((x, y, z, i), axis=0).reshape(4, len(x)).transpose()
 
     def writePointCloudToPath(self, cloud, path_to_point_cloud):
         types = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('i', 'f4')]
         vertex = np.array(cloud, types)
-        import pdb; pdb.set_trace()
+        import pdb
+        pdb.set_trace()
         el = PlyElement.describe(vertex, 'vertex')
         PlyData([el], text=True).write(path_to_point_cloud)
 
     def writeFeatureCloudToPath(self, cloud, path_to_point_cloud):
         types = [('x', 'f4'), ('y', 'f4')]
         vertex = np.array(cloud, types)
-        import pdb; pdb.set_trace()
+        import pdb
+        pdb.set_trace()
         el = PlyElement.describe(vertex, 'vertex')
         PlyData([el], text=True).write(path_to_point_cloud)
 
@@ -124,10 +138,12 @@ class DataSource:
 
     def cache_next(self, index):
         prev_end = self.end_cached
-        self.end_cached = min(self.size(), index+self.cache)
+        self.end_cached = min(self.size(), index + self.cache)
         for idx in range(prev_end, self.end_cached):
-            self.anchors[idx], self.positives[idx], self.negatives[idx] = self.load_clouds_directly(idx)
-            self.anchor_sph_images[idx], self.positive_sph_images[idx], self.negative_sph_images[idx] = self.load_images_directly(idx)
+            self.anchors[idx], self.positives[idx], self.negatives[idx] = self.load_clouds_directly(
+                idx)
+            self.anchor_sph_images[idx], self.positive_sph_images[idx], self.negative_sph_images[idx] = self.load_images_directly(
+                idx)
         return prev_end, self.end_cached
 
     def free_to_start_cached(self):
@@ -148,8 +164,8 @@ class DataSource:
         end = min(self.ds_total_size, end)
 
         return self.anchors[start:end], \
-               self.positives[start:end], \
-               self.negatives[start:end]
+            self.positives[start:end], \
+            self.negatives[start:end]
 
     def get_all_cached_images(self):
         return self.get_cached_images(self.start_cached, self.end_cached)
@@ -159,33 +175,40 @@ class DataSource:
         start = max(0, start)
         end = min(self.ds_total_size, end)
         return self.anchor_sph_images[start:end], \
-               self.positive_sph_images[start:end], \
-               self.negative_sph_images[start:end]
+            self.positive_sph_images[start:end], \
+            self.negative_sph_images[start:end]
 
     def load_clouds_directly(self, idx):
         print(f'Requesting direct index {idx} of size {len(self.anchors)}')
-        anchor = self.loadPointCloudFromPath(self.anchors[idx]) if isinstance(self.anchors[idx], str) else self.anchors[idx]
-        positive = self.loadPointCloudFromPath(self.positives[idx]) if isinstance(self.positives[idx], str) else self.positives[idx]
-        negative = self.loadPointCloudFromPath(self.negatives[idx]) if isinstance(self.negatives[idx], str) else self.negatives[idx]
+        anchor = self.loadPointCloudFromPath(self.anchors[idx]) if isinstance(
+            self.anchors[idx], str) else self.anchors[idx]
+        positive = self.loadPointCloudFromPath(self.positives[idx]) if isinstance(
+            self.positives[idx], str) else self.positives[idx]
+        negative = self.loadPointCloudFromPath(self.negatives[idx]) if isinstance(
+            self.negatives[idx], str) else self.negatives[idx]
         return anchor, positive, negative
 
     def load_images_directly(self, idx):
         print(f'Requesting direct index {idx} of size {len(self.anchors)}')
-        anchor = self.loadPointCloudFromPath(self.anchor_sph_images[idx]) if isinstance(self.anchor_sph_images[idx], str) else self.anchor_sph_images[idx]
-        positive = self.loadPointCloudFromPath(self.positive_sph_images[idx]) if isinstance(self.positive_sph_images[idx], str) else self.positive_sph_images[idx]
-        negative = self.loadPointCloudFromPath(self.negative_sph_images[idx]) if isinstance(self.negative_sph_images[idx], str) else self.negative_sph_images[idx]
+        anchor = self.loadPointCloudFromPath(self.anchor_sph_images[idx]) if isinstance(
+            self.anchor_sph_images[idx], str) else self.anchor_sph_images[idx]
+        positive = self.loadPointCloudFromPath(self.positive_sph_images[idx]) if isinstance(
+            self.positive_sph_images[idx], str) else self.positive_sph_images[idx]
+        negative = self.loadPointCloudFromPath(self.negative_sph_images[idx]) if isinstance(
+            self.negative_sph_images[idx], str) else self.negative_sph_images[idx]
         return anchor, positive, negative
+
 
 if __name__ == "__main__":
     #ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
     ds = DataSource("/tmp/training", 10)
     ds.load(10)
 
-    a,p,n = ds.get_all_cached_clouds()
+    a, p, n = ds.get_all_cached_clouds()
     print(f'len of initial cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')
     print("Caching next batch...")
     ds.cache_next(25)
-    a,p,n = ds.get_all_cached_clouds()
+    a, p, n = ds.get_all_cached_clouds()
     print(f'len of next cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')
     a_img, p_img, n_img = ds.get_all_cached_images()
     print(f'anchor image shape {a_img[0].shape}')
