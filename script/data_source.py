@@ -1,8 +1,8 @@
+import csv
 import glob
 from os import listdir
 
 import numpy as np
-
 from plyfile import PlyData, PlyElement
 
 
@@ -26,6 +26,9 @@ class DataSource:
         self.all_positive_image_files = []
         self.all_negative_files = []
         self.all_negative_image_files = []
+        self.anchor_poses = []
+        self.positive_poses = []
+        self.negative_poses = []
 
     def load(self, n=-1):
         path_anchor = self.datasource + "/training_anchor_pointclouds/"
@@ -34,6 +37,9 @@ class DataSource:
         path_positive_images = self.datasource + "/training_positive_sph_images/"
         path_negatives = self.datasource + "/training_negative_pointclouds/"
         path_negative_images = self.datasource + "/training_negative_sph_images/"
+        path_anchor_poses = self.datasource + "/anchor-poses.csv"
+        path_positive_poses = self.datasource + "/positive-poses.csv"
+        path_negative_poses = self.datasource + "/negative-poses.csv"
 
         print(f"Loading anchors from:\t{path_anchor} and {path_anchor_images}")
         self.all_anchor_files = sorted(glob.glob(path_anchor + '*.ply'))
@@ -59,13 +65,21 @@ class DataSource:
         self.negative_sph_images = self.loadDataset(
             self.all_negative_image_files, n, self.cache)
 
+        # Reads [ts qw qx qy qz, x y z].
+        self.anchor_poses = self.loadPoses(path_anchor_poses, n)
+        self.positive_poses = self.loadPoses(path_positive_poses, n)
+        self.negative_poses = self.loadPoses(path_negative_poses, n)
+
         print("Done loading dataset.")
         print(f"\tAnchor point clouds total: \t{len(self.anchors)}")
         print(f"\tAnchor images total: \t\t{len(self.anchor_sph_images)}")
+        print(f"\tAnchor poses total: \t\t{len(self.anchor_poses)}")
         print(f"\tPositive point clouds total: \t{len(self.positives)}")
         print(f"\tPositive images total: \t\t{len(self.positive_sph_images)}")
+        print(f"\tPositive poses total: \t\t{len(self.positive_poses)}")
         print(f"\tNegative point clouds total: \t{len(self.negatives)}")
         print(f"\tNegative images total: \t\t{len(self.negative_sph_images)}")
+        print(f"\tNegative poses total: \t\t{len(self.negative_poses)}")
 
     def loadDataset(self, all_files, n, cache):
         idx = 0
@@ -92,6 +106,12 @@ class DataSource:
             dataset = list(filter(None.__ne__, dataset))
 
         return dataset
+
+    def loadPoses(self, path_to_poses, n):
+        poses = np.genfromtxt(path_to_poses, delimiter=',')
+        n_poses_read = len(poses)
+        n_poses_to_process = min(n_poses_read, n) if n > 0 else n_poses_read
+        return poses[0:n_poses_to_process, :]
 
     def loadDatasetPathOnly(self, path_to_dataset, n):
         all_files = sorted(glob.glob(path_to_dataset + '*.ply'))
@@ -200,7 +220,7 @@ class DataSource:
 
 
 if __name__ == "__main__":
-    #ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
+    # ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
     ds = DataSource("/tmp/training", 10)
     ds.load(10)
 
@@ -211,4 +231,6 @@ if __name__ == "__main__":
     a, p, n = ds.get_all_cached_clouds()
     print(f'len of next cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')
     a_img, p_img, n_img = ds.get_all_cached_images()
-    print(f'anchor image shape {a_img[0].shape}')
+    print(f'anchor image len {len(a_img)}')
+    if len(ds.anchor_poses) > 0:
+        print(f'first anchor pose: {ds.anchor_poses[0,:]}')
