@@ -8,7 +8,7 @@ class Model(nn.Module):
     def __init__(self, bandwidth=100):
         super().__init__() # call the initialization function of father class (nn.Module)
 
-        self.features = [2, 10, 20, 60, 100, 200]
+        self.features = [3, 10, 20, 60, 100, 200]
         self.bandwidths = [bandwidth, 50, 25, 20, 10, 5] 
 
         assert len(self.bandwidths) == len(self.features)

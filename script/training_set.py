@@ -148,6 +148,49 @@ class TrainingSet(torch.utils.data.Dataset):
 
     def isRestoring(self):
         return self.is_restoring
+    
+    def exportGeneratedFeatures(self, export_path):
+        k_anchor_path = export_path + '/anchor/'
+        k_positive_path = export_path + '/positive/'
+        k_negative_path = export_path + '/negative/'
+        
+        n_features = len(self.anchor_features)
+        assert n_features == len(self.positive_features)
+        assert n_features == len(self.negative_features)
+        
+        for i in tqdm(range(0, n_features)):
+            self.exportAllRangeFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+            self.exportAllIntensityFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+            self.exportAllVisualFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+        
+    
+    def exportAllRangeFeatures(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature):
+        anchor_range_feature_path = f'{anchor_feature_path}range{i_feature}.csv'
+        positive_range_feature_path = f'{positive_feature_path}range{i_feature}.csv'
+        negative_range_feature_path = f'{negative_feature_path}range{i_feature}.csv'
+        self.exportFeature(anchor_range_feature_path, positive_range_feature_path, negative_range_feature_path, i_feature, 0)
+    
+    def exportAllIntensityFeatures(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature):
+        anchor_intensity_feature_path = f'{anchor_feature_path}intensity{i_feature}.csv'
+        positive_intensity_feature_path = f'{positive_feature_path}intensity{i_feature}.csv'
+        negative_intensity_feature_path = f'{negative_feature_path}intensity{i_feature}.csv'
+        self.exportFeature(anchor_intensity_feature_path, positive_intensity_feature_path, negative_intensity_feature_path, i_feature, 1)
+        
+    def exportAllVisualFeatures(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature):
+        anchor_visual_feature_path = f'{anchor_feature_path}visual{i_feature}.csv'
+        positive_visual_feature_path = f'{positive_feature_path}visual{i_feature}.csv'
+        negative_visual_feature_path = f'{negative_feature_path}visual{i_feature}.csv'
+        self.exportFeature(anchor_visual_feature_path, positive_visual_feature_path, negative_visual_feature_path, i_feature, 2)
+            
+    def exportFeature(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature, feature_idx):
+        anchor_features = self.anchor_features[i_feature][feature_idx,:,:]
+        positive_features = self.positive_features[i_feature][feature_idx,:,:]
+        negative_features = self.negative_features[i_feature][feature_idx,:,:]
+        
+        np.savetxt(anchor_feature_path, anchor_features, delimiter=',')
+        np.savetxt(positive_feature_path, positive_features, delimiter=',')
+        np.savetxt(negative_feature_path, negative_features, delimiter=',')
+        
 
 
 if __name__ == "__main__":

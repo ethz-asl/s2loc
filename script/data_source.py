@@ -1,6 +1,7 @@
 import csv
 import glob
 from os import listdir
+from os import path
 
 import numpy as np
 from plyfile import PlyData, PlyElement
@@ -85,6 +86,7 @@ class DataSource:
         idx = 0
         self.ds_total_size = len(all_files)
         n_ds = min(self.ds_total_size, n) if n > 0 else self.ds_total_size
+        cache = min(n_ds, cache)
         dataset = [None] * n_ds
         skipping = 0
         n_iter = 0
@@ -108,6 +110,8 @@ class DataSource:
         return dataset
 
     def loadPoses(self, path_to_poses, n):
+        if not path.exists(path_to_poses):
+            return []
         poses = np.genfromtxt(path_to_poses, delimiter=',')
         n_poses_read = len(poses)
         n_poses_to_process = min(n_poses_read, n) if n > 0 else n_poses_read
