@@ -4,6 +4,7 @@ import numpy as np
 import open3d as o3d
 import pymp
 import torch.utils.data
+import os
 from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
@@ -39,6 +40,8 @@ class TrainingSet(torch.utils.data.Dataset):
         self.cache = data_source.cache
         self.grid = DHGrid.CreateGrid(bw)
 
+            
+    def generateAll(self):
         # Generate features from clouds.
         if not restore:
             (a, p, n) = self.ds.get_all_cached_clouds()
@@ -192,6 +195,51 @@ class TrainingSet(torch.utils.data.Dataset):
         np.savetxt(negative_feature_path, negative_features, delimiter=',')
         
 
+    def loadTransformedFeatures(self, transformed_feature_path):
+        k_anchor_path = transformed_feature_path + '/anchor/'
+        k_positive_path = transformed_feature_path + '/positive/'
+        k_negative_path = transformed_feature_path + '/negative/'
+        
+        anchor_files = os.listdir(k_anchor_path)
+        positive_files = os.listdir(k_positive_path)
+        negative_files = os.listdir(k_negative_path)
+        
+        n_files = len(anchor_files)
+        assert n_files == len(positive_files)
+        assert n_files == len(negative_files)
+        
+        self.anchor_features = [np.zeros((3, self.bw, self.bw))] * n_files
+        self.positive_features = [np.zeros((3, self.bw, self.bw))] * n_files
+        self.negative_features = [np.zeros((3, self.bw, self.bw))] * n_files
+        
+        n_files_per_feature = int(round(n_files / 3))
+        for i in tqdm(range(0,n_files_per_feature)):
+            self.loadAllRangeTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+            self.loadAllIntensityTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+            self.loadAllVisualTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+        
+    def loadAllRangeTransformedFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_range_transformed_path = f'{anchor_path}range_transformed{i_feature}.csv'
+        positive_range_transformed_path = f'{positive_path}range_transformed{i_feature}.csv'
+        negative_range_transformed_path = f'{negative_path}range_transformed{i_feature}.csv'
+        self.loadFeature(anchor_range_transformed_path, positive_range_transformed_path, negative_range_transformed_path, i_feature, 0)
+        
+    def loadAllIntensityTransformedFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_intensity_transformed_path = f'{anchor_path}intensity_transformed{i_feature}.csv'
+        positive_intensity_transformed_path = f'{positive_path}intensity_transformed{i_feature}.csv'
+        negative_intensity_transformed_path = f'{negative_path}intensity_transformed{i_feature}.csv'
+        self.loadFeature(anchor_intensity_transformed_path, positive_intensity_transformed_path, negative_intensity_transformed_path, i_feature, 1)
+        
+    def loadAllVisualTransformedFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_visual_transformed_path = f'{anchor_path}visual_transformed{i_feature}.csv'
+        positive_visual_transformed_path = f'{positive_path}visual_transformed{i_feature}.csv'
+        negative_visual_transformed_path = f'{negative_path}visual_transformed{i_feature}.csv'
+        self.loadFeature(anchor_visual_transformed_path, positive_visual_transformed_path, negative_visual_transformed_path, i_feature, 2)
+        
+    def loadFeature(self, anchor_transformed_path, positive_transformed_path, negative_transformed_path, i_feature, feature_idx):
+        self.anchor_features[i_feature][feature_idx, :, :] = np.loadtxt(anchor_transformed_path, delimiter=',')
+        self.positive_features[i_feature][feature_idx, :, :] = np.loadtxt(positive_transformed_path, delimiter=',')
+        self.negative_features[i_feature][feature_idx, :, :] = np.loadtxt(negative_transformed_path, delimiter=',')
 
 if __name__ == "__main__":
     cache = 10
