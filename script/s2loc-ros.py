@@ -7,6 +7,7 @@ import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
 from std_srvs.srv import Empty
 
+from localization_controller import LocalizationController
 from map_building_controller import MapBuildingController
 
 
@@ -17,15 +18,21 @@ class S2LocNode(object):
             if args.map_folder == "":
                 print("ERROR: --map_folder must be specified in localization mode.")
                 sys.exit(-1)
+            self.ctrl = LocalizationController(
+                args.map_folder, args.bw, args.net, args.descritpor_size)
         elif args.mode == "map-building":
             self.ctrl = MapBuildingController(
-                args.export_map_folder, args.bw, args.net)
+                args.export_map_folder, args.bw, args.net, args.descriptor_size)
             self.is_detecting = False
+            self.map_builder_service = rospy.Service(
+                's2loc_build_map', Empty, self.build_descriptor_map)
             self.lc_service = rospy.Service(
                 's2loc_detect', Empty, self.detect_lc)
+            self.clear_map_service = rospy.Service(
+                's2loc_clear_map', Empty, self.clear_descriptor_map)
             print("Waiting for map point clouds.")
         else:
-            print("ERROR: no valid mode specified.")
+            print("ERROR: no valid mode specified: ", args.mode)
             sys.exit(-1)
 
         rospy.init_node('S2LocNode', anonymous=True)
@@ -44,6 +51,12 @@ class S2LocNode(object):
         self.ctrl.find_loop_closures()
         self.ctrl.clear_clouds()
         self.is_detecting = False
+
+    def build_descriptor_map(self, request):
+        self.ctrl.build_descriptor_map()
+
+    def clear_descriptor_map(self, request):
+        self.ctrl.clear_descriptor_map()
 
     def __convert_msg_to_array(self, cloud_msg):
         points_list = []
