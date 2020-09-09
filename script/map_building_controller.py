@@ -12,7 +12,7 @@ from model import Model
 
 
 class MapBuildingController(BaseController):
-    def __init__(self, export_map_folder="", bw=100, state_dict='./net_params_new_1.pkl', desc_size=64):
+    def __init__(self, export_map_folder="", bw=100, state_dict='./net_params_new_1.pkl', desc_size=128):
         super().__init__(bw, state_dict, desc_size)
         self.descriptors = None
         self.clouds = []

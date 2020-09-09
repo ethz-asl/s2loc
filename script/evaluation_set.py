@@ -1,18 +1,20 @@
+from functools import partial
+
+import numpy as np
+
+import pymp
 import torch.utils.data
 from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
-import numpy as np
-
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
-from functools import partial
 
-import pymp
 
 def progresser(sample, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
     sample_sphere = Sphere(sample)
     return sample_sphere.sampleUsingGrid(grid)
+
 
 class EvaluationSet(torch.utils.data.Dataset):
     def __init__(self, clouds, bw=100):
@@ -29,5 +31,6 @@ class EvaluationSet(torch.utils.data.Dataset):
         n_ds = len(clouds)
         grid = DHGrid.CreateGrid(bw)
         print("Generating spheres")
-        features = process_map(partial(progresser, grid=grid), clouds, max_workers=32)
+        features = process_map(
+            partial(progresser, grid=grid), clouds, max_workers=32)
         return features

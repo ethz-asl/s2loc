@@ -61,6 +61,7 @@ class S2LocNode(object):
     def __convert_msg_to_array(self, cloud_msg):
         points_list = []
         for data in pc2.read_points(cloud_msg, skip_nans=True):
+            print('Point cloud length: ', len(data))
             points_list.append([data[0], data[1], data[2], data[3]])
         return np.array(points_list)
 
