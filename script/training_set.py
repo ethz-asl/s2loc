@@ -32,18 +32,20 @@ def progresser(sample, grid, auto_position=True, write_safe=False, blocking=True
 
 
 class TrainingSet(torch.utils.data.Dataset):
-    def __init__(self, data_source, restore, bw=100):
-        self.ds = data_source
+    def __init__(self, restore, bw=100):
+        self.ds = None
         self.bw = bw
         self.is_restoring = restore
         self.test_indices = []
-        self.cache = data_source.cache
+        self.cache = None
         self.grid = DHGrid.CreateGrid(bw)
-
             
-    def generateAll(self):
+    def generateAll(self, datasource):
+        self.ds = datasource
+        self.cache = datasource.cache
+
         # Generate features from clouds.
-        if not restore:
+        if not self.is_restoring:
             (a, p, n) = self.ds.get_all_cached_clouds()
         else:
             (a, p, n) = self.__loadTestSet()
@@ -51,7 +53,7 @@ class TrainingSet(torch.utils.data.Dataset):
             a, p, n)
 
         # Copy all features to the data structure.
-        double_bw = 2 * bw
+        double_bw = 2 * self.bw
         n_clouds = self.ds.size()
         self.anchor_features = [np.zeros((3, double_bw, double_bw))] * n_clouds
         self.positive_features = [
@@ -66,6 +68,12 @@ class TrainingSet(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         # isinstance(l[1], str)
+        if (self.ds is not None):
+            return self.loadFromDatasource(index)
+        else:
+            return self.loadFromTransformedFeatures(index)
+    
+    def loadFromDatasource(self, index):
         if (index >= self.ds.start_cached) and (index < self.ds.end_cached):
             a, p, n = self.get_and_delete_torch_feature(index)
             return a, p, n
@@ -81,6 +89,10 @@ class TrainingSet(torch.utils.data.Dataset):
             a_cloud, a_img, p_cloud, p_img, n_cloud, n_img)
 
         return a, p, n
+    
+    def loadFromTransformedFeatures(self, index):
+        return self.anchor_features[index], self.positive_features[index], self.negative_features[index]
+        
 
     def createFeature(self, a_cloud, a_img, p_cloud, p_img, n_cloud, n_img):
         double_bw = 2 * self.bw
@@ -117,7 +129,7 @@ class TrainingSet(torch.utils.data.Dataset):
         return anchor, positive, negative
 
     def __len__(self):
-        return len(self.ds)
+        return len(self.anchor_features)
 
     def __genAllCloudFeatures(self, anchors, positives, negatives):
         print("Generating anchor spheres")
@@ -161,6 +173,7 @@ class TrainingSet(torch.utils.data.Dataset):
         assert n_features == len(self.positive_features)
         assert n_features == len(self.negative_features)
         
+        print(f'Exporting {n_features} generated features:')
         for i in tqdm(range(0, n_features)):
             self.exportAllRangeFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
             self.exportAllIntensityFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
@@ -208,11 +221,12 @@ class TrainingSet(torch.utils.data.Dataset):
         assert n_files == len(positive_files)
         assert n_files == len(negative_files)
         
-        self.anchor_features = [np.zeros((3, self.bw, self.bw))] * n_files
-        self.positive_features = [np.zeros((3, self.bw, self.bw))] * n_files
-        self.negative_features = [np.zeros((3, self.bw, self.bw))] * n_files
-        
         n_files_per_feature = int(round(n_files / 3))
+        self.anchor_features = [np.zeros((3, self.bw, self.bw))] * n_files_per_feature
+        self.positive_features = [np.zeros((3, self.bw, self.bw))] * n_files_per_feature
+        self.negative_features = [np.zeros((3, self.bw, self.bw))] * n_files_per_feature
+        
+        print(f'Loading {n_files_per_feature} transformed features:')
         for i in tqdm(range(0,n_files_per_feature)):
             self.loadAllRangeTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
             self.loadAllIntensityTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
