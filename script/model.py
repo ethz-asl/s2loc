@@ -9,7 +9,9 @@ class Model(nn.Module):
         super().__init__() # call the initialization function of father class (nn.Module)
 
         self.features = [3, 10, 20, 60, 100, 200]
-        self.bandwidths = [bandwidth, 50, 25, 20, 10, 5] 
+        #self.bandwidths = [bandwidth, 50, 25, 20, 10, 5] 
+        self.bandwidths = [bandwidth, 60, 40, 30, 20, 10] 
+        #self.bandwidths = [bandwidth, 100, 50, 25, 20, 10] 
 
         assert len(self.bandwidths) == len(self.features)
 
@@ -75,7 +77,7 @@ class Model(nn.Module):
             nn.ReLU(inplace=False),
             # linear 3
             nn.BatchNorm1d(256),
-            nn.Linear(in_features=256, out_features=128)
+            nn.Linear(in_features=256, out_features=256)
         )
 
     def forward(self, x1, x2, x3):

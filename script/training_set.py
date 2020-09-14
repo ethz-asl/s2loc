@@ -39,6 +39,9 @@ class TrainingSet(torch.utils.data.Dataset):
         self.test_indices = []
         self.cache = None
         self.grid = DHGrid.CreateGrid(bw)
+        self.anchor_features = []
+        self.positive_features = []
+        self.negative_features = []
             
     def generateAll(self, datasource):
         self.ds = datasource
@@ -207,6 +210,31 @@ class TrainingSet(torch.utils.data.Dataset):
         np.savetxt(positive_feature_path, positive_features, delimiter=',')
         np.savetxt(negative_feature_path, negative_features, delimiter=',')
         
+    def loadFeatures(self, feature_path):
+        k_anchor_path = feature_path + '/anchor/'
+        k_positive_path = feature_path + '/positive/'
+        k_negative_path = feature_path + '/negative/'
+        
+        anchor_files = os.listdir(k_anchor_path)
+        positive_files = os.listdir(k_positive_path)
+        negative_files = os.listdir(k_negative_path)
+        
+        n_files = len(anchor_files)
+        assert n_files == len(positive_files)
+        assert n_files == len(negative_files)
+        
+        n_files_per_feature = int(round(n_files / 3))
+        self.anchor_features = [np.zeros((3, 2*self.bw, 2*self.bw))] * n_files_per_feature
+        self.positive_features = [np.zeros((3, 2*self.bw, 2*self.bw))] * n_files_per_feature
+        self.negative_features = [np.zeros((3, 2*self.bw, 2*self.bw))] * n_files_per_feature
+        print(f'Loading {n_files_per_feature} features from: ')
+        print(f'\t Anchor: {k_anchor_path}')
+        print(f'\t Positive: {k_positive_path}')
+        print(f'\t Negative: {k_negative_path}')
+        for i in tqdm(range(0,n_files_per_feature)):
+            self.loadAllRangeFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+            self.loadAllIntensityFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
+            self.loadAllVisualFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
 
     def loadTransformedFeatures(self, transformed_feature_path):
         k_anchor_path = transformed_feature_path + '/anchor/'
@@ -249,6 +277,24 @@ class TrainingSet(torch.utils.data.Dataset):
         positive_visual_transformed_path = f'{positive_path}visual_transformed{i_feature}.csv'
         negative_visual_transformed_path = f'{negative_path}visual_transformed{i_feature}.csv'
         self.loadFeature(anchor_visual_transformed_path, positive_visual_transformed_path, negative_visual_transformed_path, i_feature, 2)
+        
+    def loadAllRangeFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_range_path = f'{anchor_path}range{i_feature}.csv'
+        positive_range_path = f'{positive_path}range{i_feature}.csv'
+        negative_range_path = f'{negative_path}range{i_feature}.csv'
+        self.loadFeature(anchor_range_path, positive_range_path, negative_range_path, i_feature, 0)
+        
+    def loadAllIntensityFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_intensity_path = f'{anchor_path}intensity{i_feature}.csv'
+        positive_intensity_path = f'{positive_path}intensity{i_feature}.csv'
+        negative_intensity_path = f'{negative_path}intensity{i_feature}.csv'
+        self.loadFeature(anchor_intensity_path, positive_intensity_path, negative_intensity_path, i_feature, 1)
+        
+    def loadAllVisualFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_visual_path = f'{anchor_path}visual{i_feature}.csv'
+        positive_visual_path = f'{positive_path}visual{i_feature}.csv'
+        negative_visual_path = f'{negative_path}visual{i_feature}.csv'
+        self.loadFeature(anchor_visual_path, positive_visual_path, negative_visual_path, i_feature, 2)
         
     def loadFeature(self, anchor_transformed_path, positive_transformed_path, negative_transformed_path, i_feature, feature_idx):
         self.anchor_features[i_feature][feature_idx, :, :] = np.loadtxt(anchor_transformed_path, delimiter=',')
