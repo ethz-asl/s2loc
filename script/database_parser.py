@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+
 from tqdm.auto import tqdm, trange
 
 
@@ -49,8 +50,8 @@ class DatabaseParser(object):
 
 
 if __name__ == "__main__":
-    #db_parser = DatabaseParser('/mnt/data/datasets/Spherical/test_training/')
-    db_parser = DatabaseParser('/tmp/training/')
+    db_parser = DatabaseParser('/mnt/data/datasets/Spherical/test_training/')
+    #db_parser = DatabaseParser('/tmp/training/')
     training_missions = ['8d1b..0000', '25b1..0000', 'ef8b..0000', 'b03a..0000', '0167..0000', '472b..0000', '0282..0000',
                          'e2da..0000', '8a4a..0000', '657d..0000', 'f760..0000', '73cc..0000', '0569..0000', '174e..0000', 'b52f..0000']
     test_missions = ['89de..0000', '96af..0000', 'd530..0000',
