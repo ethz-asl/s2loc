@@ -51,7 +51,7 @@ bandwidth = 100
 net = Model(bandwidth).cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
-n_epochs = 100
+n_epochs = 5
 batch_size = 13
 num_workers = 32
 descriptor_size = 256
@@ -64,16 +64,20 @@ feature_dim = bandwidth * 2
 #summary(net, input_size=[(n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim)])
 
 # ## Load the data
-n_data = 1
-training_missions, test_missions = MissionIndices.get_arche_high_res()
-dataset_path = "/mnt/data/datasets/Spherical/training"
-#ds = DataSource('/media/scratch/berlukas/spherical', n_data)
+n_data = 100
+cache = n_data
+#dataset_path = "/mnt/data/datasets/Spherical/training"
+dataset_path = "/media/scratch/berlukas/spherical/"
 db_parser = DatabaseParser(dataset_path)
-ds = DataSource(dataset_path, n_data)
-#ds = DataSource('/media/scratch/berlukas/spherical', n_data)
+
+training_missions, test_missions = MissionIndices.get_arche_high_res()
 training_indices, test_indices = db_parser.extract_training_and_test_indices(
     training_missions, test_missions)
-ds.load(n_data, training_indices)
+idx = np.array(training_indices['idx'].tolist())
+
+
+ds = DataSource(dataset_path, cache)
+ds.load(n_data, idx)
 train_set = TrainingSet(restore, bandwidth)
 train_set.generateAll(ds)
 # train_set.loadTransformedFeatures(
@@ -89,7 +93,11 @@ val_size = split.get_val_size()
 test_size = split.get_test_size()
 print("Training size: ", train_size)
 print("Validation size: ", val_size)
-print("Testing size: ", test_size)
+if test_size == 0:
+    print('Test size is 0. Configured for external tests')
+else:
+    print("Testing size: ", test_size)
+
 
 visualize = False
 if visualize:
@@ -191,6 +199,16 @@ def test(net, criterion, writer):
     n_iter = 0
     net.eval()
     with torch.no_grad():
+        n_test_data = 100
+        ds_test = DataSource('/media/scratch/berlukas/spherical', n_data, -1)
+        idx = np.array(test_indices['idx'].tolist())
+        ds_test.load(n_data, test)
+        n_test_data = len(ds.anchors)
+        test_set = TrainingSet(restore, bandwidth)
+        test_set.generateAll(ds_test)
+        print("Total size of the test set: ", len(test_set))
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=10, shuffle=False, num_workers=1, pin_memory=True, drop_last=False)
+
         test_accs = AverageMeter()
         test_pos_dist = AverageMeter()
         test_neg_dist = AverageMeter()
