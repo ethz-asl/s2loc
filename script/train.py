@@ -52,9 +52,9 @@ bandwidth = 100
 net = Model(bandwidth).cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
-n_epochs = 50
-batch_size = 11
-num_workers = 12
+n_epochs = 100
+batch_size = 13
+num_workers = 32
 descriptor_size = 256
 net_input_size = 2*bandwidth
 n_features = 3
@@ -66,12 +66,13 @@ feature_dim = bandwidth * 2
 
 # ## Load the data
 
-n_data = 4000
+n_data = 3000
 #ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
 ds = DataSource('/media/scratch/berlukas/spherical', n_data)
 ds.load(n_data)
 train_set = TrainingSet(restore, bandwidth)
 train_set.generateAll(ds)
+#train_set.loadFeatures('/media/scratch/berlukas/exported_features')
 #train_set.loadTransformedFeatures('/media/scratch/berlukas/transformed_features')
 
 print("Total size: ", len(train_set))
@@ -124,6 +125,9 @@ def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
         loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
         loss = loss_triplet + 0.001 * loss_embedd
         #loss = loss_triplet
+
+        if (np.isnan(loss.cpu().data)):
+                return -1
 
         loss.backward()
         optimizer.step()
@@ -248,6 +252,9 @@ if not restore:
         t0 = time.time()
 
         train_iter = train(net, criterion, optimizer, writer, epoch, train_iter, loss_, t0)
+        if (np.isnan(loss_) or train_iter == -1):
+            print('Loss is nan. Aborting')
+            break
 
         val_iter = validate(net, criterion, optimizer, writer, epoch, val_iter)
 

@@ -104,19 +104,19 @@ class TrainingSet(torch.utils.data.Dataset):
         negative_features = np.zeros((3, double_bw, double_bw))
 
         a_img_feat = np.reshape(a_img.transpose(), (4, double_bw, double_bw))
-        anchor_features[0, :, :] = a_cloud[0, :, :]
-        anchor_features[1, :, :] = a_cloud[1, :, :]
-        anchor_features[2, :, :] = a_img_feat[3, :, :]
+        anchor_features[0, :, :] = np.nan_to_num(a_cloud[0, :, :])
+        anchor_features[1, :, :] = np.nan_to_num(a_cloud[1, :, :])
+        anchor_features[2, :, :] = np.nan_to_num(a_img_feat[3, :, :])
 
         p_img_feat = np.reshape(p_img.transpose(), (4, double_bw, double_bw))
-        positive_features[0, :, :] = p_cloud[0, :, :]
-        positive_features[1, :, :] = p_cloud[1, :, :]
-        positive_features[2, :, :] = p_img_feat[3, :, :]
+        positive_features[0, :, :] = np.nan_to_num(p_cloud[0, :, :])
+        positive_features[1, :, :] = np.nan_to_num(p_cloud[1, :, :])
+        positive_features[2, :, :] = np.nan_to_num(p_img_feat[3, :, :])
 
         n_img_feat = np.reshape(n_img.transpose(), (4, double_bw, double_bw))
-        negative_features[0, :, :] = n_cloud[0, :, :]
-        negative_features[1, :, :] = n_cloud[1, :, :]
-        negative_features[2, :, :] = n_img_feat[3, :, :]
+        negative_features[0, :, :] = np.nan_to_num(n_cloud[0, :, :])
+        negative_features[1, :, :] = np.nan_to_num(n_cloud[1, :, :])
+        negative_features[2, :, :] = np.nan_to_num(n_img_feat[3, :, :])
 
         return anchor_features, positive_features, negative_features
 

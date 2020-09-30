@@ -9,7 +9,7 @@ import numpy as np
 
 class DataSplitter:
 
-    def __init__(self, dataset, restore, test_train_split=0.8, val_train_split=0.1, shuffle=False):
+    def __init__(self, dataset, restore, test_train_split=0.9, val_train_split=0.1, shuffle=False):
         self.dataset = dataset
         self.dataset_size = len(dataset)
         self.indices = list(range(self.dataset_size))

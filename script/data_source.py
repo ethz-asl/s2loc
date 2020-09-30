@@ -2,9 +2,27 @@ import csv
 import glob
 from os import listdir
 from os import path
+from functools import partial
+from tqdm.auto import tqdm, trange
+from tqdm.contrib.concurrent import process_map, thread_map
 
 import numpy as np
 from plyfile import PlyData, PlyElement
+
+def progresser(ply_file, auto_position=True, write_safe=False, blocking=True, progress=False):
+    plydata = PlyData.read(ply_file)
+    vertex = plydata['vertex']
+    x = vertex['x']
+    y = vertex['y']
+    z = vertex['z']
+    if 'scalar' in vertex._property_lookup:
+        i = vertex['scalar']
+    elif 'intensity' in vertex._property_lookup:
+        i = vertex['intensity']
+    else:
+        i = plydata['vertex'][plydata.elements[0].properties[3].name]
+
+    return np.concatenate((x, y, z, i), axis=0).reshape(4, len(x)).transpose()
 
 
 class DataSource:
@@ -89,11 +107,9 @@ class DataSource:
         cache = min(n_ds, cache)
         dataset = [None] * n_ds
         skipping = 0
-        n_iter = 0
-        for ply_file in all_files:
-            n_iter = n_iter + 1
-            if n_iter > n:
-                break
+        '''
+        for i in tqdm(range(0, n_ds)):
+            ply_file = all_files[i]
 
             if self.skip_nth != -1 and skipping > 0 and skipping <= self.skip_nth:
                 skipping = skipping + 1
@@ -106,6 +122,10 @@ class DataSource:
         self.end_cached = cache
         if self.skip_nth != -1:
             dataset = list(filter(None.__ne__, dataset))
+        '''
+        dataset = process_map(
+                partial(progresser), all_files[0:n_ds], max_workers=32)
+        self.end_cached = n_ds
 
         return dataset
 
@@ -225,7 +245,8 @@ class DataSource:
 
 if __name__ == "__main__":
     # ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
-    ds = DataSource("/tmp/training", 10)
+    #ds = DataSource("/tmp/training", 10)
+    ds = DataSource("/media/scratch/berlukas/spherical", 10)
     ds.load(10)
 
     a, p, n = ds.get_all_cached_clouds()
@@ -238,3 +259,4 @@ if __name__ == "__main__":
     print(f'anchor image len {len(a_img)}')
     if len(ds.anchor_poses) > 0:
         print(f'first anchor pose: {ds.anchor_poses[0,:]}')
+    print(f'anchor image mage shape: {a_img[0].shape}')
