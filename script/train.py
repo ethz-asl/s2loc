@@ -158,7 +158,7 @@ def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
         writer.add_scalar('Train/Loss', loss, n_iter)
         n_iter += 1
 
-        if batch_idx % 100 == 99:
+        if batch_idx % 50 == 49:
             t1 = time.time()
             print('[Epoch %d, Batch %4d] loss: %.5f time: %.5f lr: %.3e' %
                   (epoch + 1, batch_idx + 1, loss_ / 100, (t1 - t0) / 60, lr))
@@ -239,7 +239,7 @@ def test(net, criterion, writer):
         n_test_data = 100
         n_test_cache = n_test_data
         ds_test = DataSource('/media/scratch/berlukas/spherical', n_test_cache, -1)
-        idx = np.array(test_indices['idx'].tolist())
+        idx = np.array(training_indices['idx'].tolist())
         ds_test.load(n_data, idx)
         n_test_data = len(ds.anchors)
         test_set = TrainingSet(restore, bandwidth)
@@ -249,7 +249,11 @@ def test(net, criterion, writer):
             print("Empty test set. Aborting test.")
             return
         print("Total size of the test set: ", n_test_set)
-        test_loader = torch.utils.data.DataLoader(test_set, batch_size=10, shuffle=False, num_workers=1, pin_memory=True, drop_last=False)
+        test_size = n_test_set
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, shuffle=False, num_workers=1, pin_memory=True, drop_last=False)
+        anchor_poses = ds_test.anchor_poses
+        positive_poses = ds_test.positive_poses
+        assert len(anchor_poses) == len(positive_poses)
 
         test_accs = AverageMeter()
         test_pos_dist = AverageMeter()
@@ -292,11 +296,13 @@ def test(net, criterion, writer):
         tree = spatial.KDTree(desc_positives)
         p_norm = 2
         max_pos_dist = 0.05
+        max_loc_dist = 5.0
         max_anchor_dist = 1
         for n_nearest_neighbors in range(1, 21):
             pos_count = 0
             anchor_count = 0
             idx_count = 0
+            loc_count = 0
             for idx in range(n_test_data):
                 nn_dists, nn_indices = tree.query(
                     desc_anchors[idx, :], p=p_norm, k=n_nearest_neighbors)
@@ -323,6 +329,13 @@ def test(net, criterion, writer):
                     if (nn_i == idx):
                         idx_count = idx_count + 1
                         break
+                dist = spatial.distance.euclidean(
+                    positive_poses[nn_i, 5:8], anchor_poses[idx, 5:8])
+                if (dist <= max_pos_dist):
+                    loc_count = loc_count + 1
+                    break
+
+            loc_precision = (loc_count * 1.0) / n_data
             pos_precision = (pos_count * 1.0) / test_size
             anchor_precision = (anchor_count * 1.0) / test_size
             idx_precision = (idx_count * 1.0) / test_size
@@ -332,6 +345,8 @@ def test(net, criterion, writer):
                               anchor_precision, n_nearest_neighbors)
             writer.add_scalar('Test/Precision/Index_Count',
                               idx_precision, n_nearest_neighbors)
+            writer.add_scalar('Test/Precision/Localization',
+                              loc_precision, n_nearest_neighbors)
 
 
 if not restore:
