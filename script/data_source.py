@@ -1,12 +1,12 @@
 import csv
 import glob
-from os import listdir
-from os import path
+from os import listdir, path
 from functools import partial
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
 
 import numpy as np
+
 from plyfile import PlyData, PlyElement
 
 def progresser(ply_file, auto_position=True, write_safe=False, blocking=True, progress=False):
@@ -49,7 +49,7 @@ class DataSource:
         self.positive_poses = []
         self.negative_poses = []
 
-    def load(self, n=-1):
+    def load(self, n=-1, indices=None):
         path_anchor = self.datasource + "/training_anchor_pointclouds/"
         path_anchor_images = self.datasource + "/training_anchor_sph_images/"
         path_positives = self.datasource + "/training_positive_pointclouds/"
@@ -62,25 +62,36 @@ class DataSource:
 
         print(f"Loading anchors from:\t{path_anchor} and {path_anchor_images}")
         self.all_anchor_files = sorted(glob.glob(path_anchor + '*.ply'))
-        self.anchors = self.loadDataset(self.all_anchor_files, n, self.cache)
         self.all_anchor_image_files = sorted(
             glob.glob(path_anchor_images + '*.ply'))
+        if indices is not None:
+            self.all_anchor_files, self.all_anchor_image_files = self.filterFiles(
+                self.all_anchor_files, self.all_anchor_image_files, n, indices)
+        self.anchors = self.loadDataset(self.all_anchor_files, n, self.cache)
         self.anchor_sph_images = self.loadDataset(
             self.all_anchor_image_files, n, self.cache)
+
         print(f"Loading positives from:\t{path_positives} and {path_positive_images}")
         self.all_positive_files = sorted(glob.glob(path_positives + '*.ply'))
-        self.positives = self.loadDataset(
-            self.all_positive_files, n, self.cache)
         self.all_positive_image_files = sorted(
             glob.glob(path_positive_images + '*.ply'))
+        if indices is not None:
+            self.all_positive_files, self.all_positive_image_files = self.filterFiles(
+                self.all_positive_files, self.all_positive_image_files, n, indices)
+        self.positives = self.loadDataset(
+            self.all_positive_files, n, self.cache)
         self.positive_sph_images = self.loadDataset(
             self.all_positive_image_files, n, self.cache)
+
         print(f"Loading negatives from:\t{path_negatives} and {path_negative_images}")
         self.all_negative_files = sorted(glob.glob(path_negatives + '*.ply'))
-        self.negatives = self.loadDataset(
-            self.all_negative_files, n, self.cache)
         self.all_negative_image_files = sorted(
             glob.glob(path_negative_images + '*.ply'))
+        if indices is not None:
+            self.all_negative_files, self.all_negative_image_files = self.filterFiles(
+                self.all_negative_files, self.all_negative_image_files, n, indices)
+        self.negatives = self.loadDataset(
+            self.all_negative_files, n, self.cache)
         self.negative_sph_images = self.loadDataset(
             self.all_negative_image_files, n, self.cache)
 
@@ -99,6 +110,20 @@ class DataSource:
         print(f"\tNegative point clouds total: \t{len(self.negatives)}")
         print(f"\tNegative images total: \t\t{len(self.negative_sph_images)}")
         print(f"\tNegative poses total: \t\t{len(self.negative_poses)}")
+
+    def filterFiles(self, cloud_files, img_files, n_data, indices):
+        k = 0
+        n_indices = len(indices)
+        cloud_files_filtered = [None] * n_indices
+        img_files_filtered = [None] * n_indices
+        for i in indices:
+            if i >= n_data:
+                continue
+            cloud_files_filtered[k] = cloud_files[i]
+            img_files_filtered[k] = img_files[i]
+            k = k + 1
+
+        return list(filter(None, cloud_files_filtered)), list(filter(None, img_files_filtered))
 
     def loadDataset(self, all_files, n, cache):
         idx = 0
@@ -144,6 +169,7 @@ class DataSource:
         return dataset
 
     def loadPointCloudFromPath(self, path_to_point_cloud):
+        # print(f'Loading point cloud from {path_to_point_cloud}')
         plydata = PlyData.read(path_to_point_cloud)
         vertex = plydata['vertex']
         x = vertex['x']
@@ -223,7 +249,7 @@ class DataSource:
             self.negative_sph_images[start:end]
 
     def load_clouds_directly(self, idx):
-        print(f'Requesting direct index {idx} of size {len(self.anchors)}')
+        # print(f'Requesting direct index {idx} of size {len(self.anchors)}')
         anchor = self.loadPointCloudFromPath(self.anchors[idx]) if isinstance(
             self.anchors[idx], str) else self.anchors[idx]
         positive = self.loadPointCloudFromPath(self.positives[idx]) if isinstance(
@@ -233,7 +259,7 @@ class DataSource:
         return anchor, positive, negative
 
     def load_images_directly(self, idx):
-        print(f'Requesting direct index {idx} of size {len(self.anchors)}')
+        # print(f'Requesting direct index {idx} of size {len(self.anchors)}')
         anchor = self.loadPointCloudFromPath(self.anchor_sph_images[idx]) if isinstance(
             self.anchor_sph_images[idx], str) else self.anchor_sph_images[idx]
         positive = self.loadPointCloudFromPath(self.positive_sph_images[idx]) if isinstance(
