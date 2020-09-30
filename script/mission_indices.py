@@ -29,7 +29,7 @@ if __name__ == "__main__":
     training_indices, test_indices = db_parser.extract_training_and_test_indices(
         training_missions, test_missions)
     print(f'Found {training_indices.size} training and {test_indices.size} test data')
-    idx = np.argsort(training_indices['idx'].tolist())
+    idx = np.array(training_indices['idx'].tolist())
     print(idx)
 
     ds_train = DataSource(dataset_path, n_data)

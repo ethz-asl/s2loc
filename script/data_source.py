@@ -104,7 +104,8 @@ class DataSource:
             cloud_files_filtered[k] = cloud_files[i]
             img_files_filtered[k] = img_files[i]
             k = k + 1
-        return cloud_files_filtered, img_files_filtered
+
+        return list(filter(None, cloud_files_filtered)), list(filter(None, img_files_filtered))
 
     def loadDataset(self, all_files, n, cache):
         idx = 0
@@ -148,6 +149,7 @@ class DataSource:
         return dataset
 
     def loadPointCloudFromPath(self, path_to_point_cloud):
+        # print(f'Loading point cloud from {path_to_point_cloud}')
         plydata = PlyData.read(path_to_point_cloud)
         vertex = plydata['vertex']
         x = vertex['x']
