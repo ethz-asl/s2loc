@@ -21,9 +21,10 @@ class DatabaseParser(object):
     def extract_training_and_test_indices(self, training_missions, test_missions):
         training_indices = self._extract_sample_indices(training_missions)
         test_indices = self._extract_sample_indices(test_missions)
-        natural_join_test_training = test_indices.join(
-            training_indices.set_index('idx'), on='idx', how='inner')
-        assert(natural_join_test_training.size == 0)
+        if not training_indices.empty and not test_indices.empty:
+            natural_join_test_training = test_indices.join(
+                training_indices.set_index('idx'), on='idx', how='inner')
+            assert(natural_join_test_training.size == 0)
         return training_indices, test_indices
 
     def _extract_sample_indices(self, missions):

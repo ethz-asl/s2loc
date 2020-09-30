@@ -8,40 +8,39 @@
 # Author: Lukas Bernreiter (lukas.bernreiter@ieee.org)
 #
 
-from data_source import DataSource
-from visualize import Visualize
-from sphere import Sphere
-from model import Model
-from loss import TripletLoss, ImprovedTripletLoss
-from training_set import TrainingSet
-from average_meter import AverageMeter
-from data_splitter import DataSplitter
+import math
+import sys
+import time
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.backends.backend_pdf import PdfPages
+from scipy import spatial
+
+import open3d as o3d
 import torch
 import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
+from average_meter import AverageMeter
+from data_source import DataSource
+from data_splitter import DataSplitter
+from database_parser import DatabaseParser
+from loss import ImprovedTripletLoss, TripletLoss
+from mission_indices import MissionIndices
+from model import Model
+from sphere import Sphere
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
-
-import sys
-import time
-import math
-import numpy as np
-import pandas as pd
-import open3d as o3d
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-
 from tqdm.auto import tqdm
-from scipy import spatial
-
+from training_set import TrainingSet
+from visualize import Visualize
 
 # ## Load All Data
 #
 # Load the dataset, project each point cloud on a sphere and derive a function for it.
-
 
 
 # ## Initialize the model and the training set
@@ -56,7 +55,7 @@ n_epochs = 50
 batch_size = 11
 num_workers = 12
 descriptor_size = 256
-net_input_size = 2*bandwidth
+net_input_size = 2 * bandwidth
 n_features = 3
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 writer = SummaryWriter()
@@ -65,19 +64,25 @@ feature_dim = bandwidth * 2
 #summary(net, input_size=[(n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim)])
 
 # ## Load the data
-
-n_data = 4000
-#ds = DataSource("/mnt/data/datasets/Spherical/training", cache)
-ds = DataSource('/media/scratch/berlukas/spherical', n_data)
-ds.load(n_data)
-train_set = TrainingSet(restore, bandwidth)
+n_data = 1
+training_missions, test_missions = MissionIndices.get_arche_high_res()
+dataset_path = "/mnt/data/datasets/Spherical/training"
+db_parser = DatabaseParser(dataset_path)
+ds = DataSource(dataset_path, n_data)
+#ds = DataSource('/media/scratch/berlukas/spherical', n_data)
+training_indices, test_indices = db_parser.extract_training_and_test_indices(
+    training_missions, test_missions)
+ds.load(n_data, training_indices)
+train_set = TrainingSet(restore, 2 * bandwidth)
 train_set.generateAll(ds)
-#train_set.loadTransformedFeatures('/media/scratch/berlukas/transformed_features')
+# train_set.loadTransformedFeatures(
+#'/media/scratch/berlukas/transformed_features')
 
 print("Total size: ", len(train_set))
-split = DataSplitter(train_set, restore, shuffle=True)
+split = DataSplitter(train_set, restore, test_train_split=1.0, shuffle=True)
 
-train_loader, val_loader, test_loader = split.get_split(batch_size=batch_size, num_workers=num_workers)
+train_loader, val_loader, test_loader = split.get_split(
+    batch_size=batch_size, num_workers=num_workers)
 train_size = split.get_train_size()
 val_size = split.get_val_size()
 test_size = split.get_test_size()
@@ -96,6 +101,7 @@ if visualize:
 
 # ## Train model
 
+
 def adjust_learning_rate_exp(optimizer, epoch_num, lr=5e-3):
     decay_rate = 0.96
     new_lr = lr * math.pow(decay_rate, epoch_num)
@@ -104,24 +110,30 @@ def adjust_learning_rate_exp(optimizer, epoch_num, lr=5e-3):
 
     return new_lr
 
+
 val_accs = AverageMeter()
 loss_ = 0
+
 
 def accuracy(dista, distb):
     margin = 0
     pred = (dista - distb - margin).cpu().data
-    acc = ((pred < 0).sum()).float()/dista.size(0)
+    acc = ((pred < 0).sum()).float() / dista.size(0)
     return acc
+
 
 def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
     net.train()
     for batch_idx, (data1, data2, data3) in enumerate(train_loader):
-        data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
+        data1, data2, data3 = data1.cuda().float(
+        ), data2.cuda().float(), data3.cuda().float()
         embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
         optimizer.zero_grad()
 
-        dista, distb, loss_triplet, loss_total = criterion(embedded_a, embedded_p, embedded_n)
-        loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
+        dista, distb, loss_triplet, loss_total = criterion(
+            embedded_a, embedded_p, embedded_n)
+        loss_embedd = embedded_a.norm(
+            2) + embedded_p.norm(2) + embedded_n.norm(2)
         loss = loss_triplet + 0.001 * loss_embedd
         #loss = loss_triplet
 
@@ -137,23 +149,26 @@ def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
         if batch_idx % 100 == 99:
             t1 = time.time()
             print('[Epoch %d, Batch %4d] loss: %.5f time: %.5f lr: %.3e' %
-                (epoch + 1, batch_idx + 1, loss_ / 100, (t1-t0) / 60, lr))
+                  (epoch + 1, batch_idx + 1, loss_ / 100, (t1 - t0) / 60, lr))
             t0 = t1
             loss_ = 0.0
     return n_iter
+
 
 def validate(net, criterion, optimizer, writer, epoch, n_iter):
     net.eval()
     with torch.no_grad():
         for batch_idx, (data1, data2, data3) in enumerate(val_loader):
-            data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
+            data1, data2, data3 = data1.cuda().float(
+            ), data2.cuda().float(), data3.cuda().float()
             embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
             optimizer.zero_grad()
 
-            dista, distb, loss_triplet, loss_total = criterion(embedded_a, embedded_p, embedded_n)
-            loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
+            dista, distb, loss_triplet, loss_total = criterion(
+                embedded_a, embedded_p, embedded_n)
+            loss_embedd = embedded_a.norm(
+                2) + embedded_p.norm(2) + embedded_n.norm(2)
             loss = loss_triplet + 0.001 * loss_embedd
-
 
             acc = accuracy(dista, distb)
             val_accs.update(acc, data1.size(0))
@@ -164,8 +179,9 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
             n_iter += 1
     return n_iter
 
+
 def test(net, criterion, writer):
-    with open('test_indices.txt','wb') as f:
+    with open('test_indices.txt', 'wb') as f:
         np.savetxt(f, np.array(split.test_indices), fmt='%d')
 
     n_iter = 0
@@ -177,27 +193,35 @@ def test(net, criterion, writer):
         anchor_embeddings = np.empty(1)
         positive_embeddings = np.empty(1)
         for batch_idx, (data1, data2, data3) in enumerate(test_loader):
-                embedded_a, embedded_p, embedded_n = net(data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
-                dist_to_pos, dist_to_neg, loss, loss_total = criterion(embedded_a, embedded_p, embedded_n)
-                writer.add_scalar('Test/Loss', loss, n_iter)
+            embedded_a, embedded_p, embedded_n = net(
+                data1.cuda().float(), data2.cuda().float(), data3.cuda().float())
+            dist_to_pos, dist_to_neg, loss, loss_total = criterion(
+                embedded_a, embedded_p, embedded_n)
+            writer.add_scalar('Test/Loss', loss, n_iter)
 
-                acc = accuracy(dist_to_pos, dist_to_neg)
-                test_accs.update(acc, data1.size(0))
-                test_pos_dist.update(dist_to_pos.cpu().data.numpy().sum())
-                test_neg_dist.update(dist_to_neg.cpu().data.numpy().sum())
+            acc = accuracy(dist_to_pos, dist_to_neg)
+            test_accs.update(acc, data1.size(0))
+            test_pos_dist.update(dist_to_pos.cpu().data.numpy().sum())
+            test_neg_dist.update(dist_to_neg.cpu().data.numpy().sum())
 
-                writer.add_scalar('Test/Accuracy', test_accs.avg, n_iter)
-                writer.add_scalar('Test/Distance/Positive', test_pos_dist.avg, n_iter)
-                writer.add_scalar('Test/Distance/Negative', test_neg_dist.avg, n_iter)
+            writer.add_scalar('Test/Accuracy', test_accs.avg, n_iter)
+            writer.add_scalar('Test/Distance/Positive',
+                              test_pos_dist.avg, n_iter)
+            writer.add_scalar('Test/Distance/Negative',
+                              test_neg_dist.avg, n_iter)
 
-                anchor_embeddings = np.append(anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1,-1]))
-                positive_embeddings = np.append(positive_embeddings, embedded_p.cpu().data.numpy().reshape([1,-1]))
-                n_iter = n_iter + 1
+            anchor_embeddings = np.append(
+                anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1, -1]))
+            positive_embeddings = np.append(
+                positive_embeddings, embedded_p.cpu().data.numpy().reshape([1, -1]))
+            n_iter = n_iter + 1
 
         #import pdb; pdb.set_trace()
 
-        desc_anchors = anchor_embeddings[1:].reshape([test_size, descriptor_size])
-        desc_positives = positive_embeddings[1:].reshape([test_size, descriptor_size])
+        desc_anchors = anchor_embeddings[1:].reshape(
+            [test_size, descriptor_size])
+        desc_positives = positive_embeddings[1:].reshape(
+            [test_size, descriptor_size])
         print(np.array(desc_positives).shape)
 
         sys.setrecursionlimit(50000)
@@ -205,49 +229,58 @@ def test(net, criterion, writer):
         p_norm = 2
         max_pos_dist = 0.05
         max_anchor_dist = 1
-        for n_nearest_neighbors in range(1,21):
+        for n_nearest_neighbors in range(1, 21):
             pos_count = 0
             anchor_count = 0
             idx_count = 0
             for idx in range(test_size):
-                nn_dists, nn_indices = tree.query(desc_anchors[idx,:], p = p_norm, k = n_nearest_neighbors)
-                nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
+                nn_dists, nn_indices = tree.query(
+                    desc_anchors[idx, :], p=p_norm, k=n_nearest_neighbors)
+                nn_indices = [
+                    nn_indices] if n_nearest_neighbors == 1 else nn_indices
 
                 for nn_i in nn_indices:
                     if (nn_i >= test_size):
-                        break;
-                    dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_positives[idx,:])
+                        break
+                    dist = spatial.distance.euclidean(
+                        desc_positives[nn_i, :], desc_positives[idx, :])
                     if (dist <= max_pos_dist):
-                        pos_count = pos_count + 1;
+                        pos_count = pos_count + 1
                         break
                 for nn_i in nn_indices:
                     if (nn_i >= test_size):
-                        break;
-                    dist = spatial.distance.euclidean(desc_positives[nn_i,:], desc_anchors[idx,:])
+                        break
+                    dist = spatial.distance.euclidean(
+                        desc_positives[nn_i, :], desc_anchors[idx, :])
                     if (dist <= max_anchor_dist):
-                        anchor_count = anchor_count + 1;
+                        anchor_count = anchor_count + 1
                         break
                 for nn_i in nn_indices:
                     if (nn_i == idx):
-                        idx_count = idx_count + 1;
+                        idx_count = idx_count + 1
                         break
-            pos_precision = (pos_count*1.0) / test_size
-            anchor_precision = (anchor_count*1.0) / test_size
-            idx_precision = (idx_count*1.0) / test_size
-            writer.add_scalar('Test/Precision/Positive_Distance', pos_precision, n_nearest_neighbors)
-            writer.add_scalar('Test/Precision/Anchor_Distance', anchor_precision, n_nearest_neighbors)
-            writer.add_scalar('Test/Precision/Index_Count', idx_precision, n_nearest_neighbors)
+            pos_precision = (pos_count * 1.0) / test_size
+            anchor_precision = (anchor_count * 1.0) / test_size
+            idx_precision = (idx_count * 1.0) / test_size
+            writer.add_scalar('Test/Precision/Positive_Distance',
+                              pos_precision, n_nearest_neighbors)
+            writer.add_scalar('Test/Precision/Anchor_Distance',
+                              anchor_precision, n_nearest_neighbors)
+            writer.add_scalar('Test/Precision/Index_Count',
+                              idx_precision, n_nearest_neighbors)
+
 
 if not restore:
     train_iter = 0
     val_iter = 0
     loss_ = 0.0
-    print(f'Starting training using {n_epochs} epochs');
+    print(f'Starting training using {n_epochs} epochs')
     for epoch in tqdm(range(n_epochs)):
         lr = adjust_learning_rate_exp(optimizer, epoch_num=epoch)
         t0 = time.time()
 
-        train_iter = train(net, criterion, optimizer, writer, epoch, train_iter, loss_, t0)
+        train_iter = train(net, criterion, optimizer, writer,
+                           epoch, train_iter, loss_, t0)
 
         val_iter = validate(net, criterion, optimizer, writer, epoch, val_iter)
 
@@ -258,7 +291,7 @@ if not restore:
 else:
     net.load_state_dict(torch.load(model_save))
 
-## Test
+# Test
 
 print("Starting testing...")
 torch.cuda.empty_cache()
