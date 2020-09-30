@@ -18,9 +18,11 @@ class MissionIndices:
 if __name__ == "__main__":
     from data_source import DataSource
     from database_parser import DatabaseParser
+    from training_set import TrainingSet
     import numpy as np
 
     n_data = 50
+    cache = 8
     training_missions, test_missions = MissionIndices.get_arche_low_res()
     print('Loading training data...')
     print(training_missions)
@@ -32,8 +34,18 @@ if __name__ == "__main__":
     idx = np.array(training_indices['idx'].tolist())
     print(idx)
 
-    ds_train = DataSource(dataset_path, n_data)
+    ds_train = DataSource(dataset_path, cache)
     ds_train.load(n_data, idx)
 
-    ds_test = DataSource(dataset_path, n_data)
+    ts = TrainingSet(restore=False, bw=100)
+    ts.generateAll(ds_train)
+
+    for i in range(0, 10):
+        print(f'Processing feature {i}')
+        a, p, n = ts[i]
+        assert a is not None
+        assert p is not None
+        assert n is not None
+
+    #ds_test = DataSource(dataset_path, n_data)
     #ds_test.load(n_data, test_indices)

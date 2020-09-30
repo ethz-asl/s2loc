@@ -229,7 +229,7 @@ class DataSource:
             self.negative_sph_images[start:end]
 
     def load_clouds_directly(self, idx):
-        print(f'Requesting direct index {idx} of size {len(self.anchors)}')
+        # print(f'Requesting direct index {idx} of size {len(self.anchors)}')
         anchor = self.loadPointCloudFromPath(self.anchors[idx]) if isinstance(
             self.anchors[idx], str) else self.anchors[idx]
         positive = self.loadPointCloudFromPath(self.positives[idx]) if isinstance(
@@ -239,7 +239,7 @@ class DataSource:
         return anchor, positive, negative
 
     def load_images_directly(self, idx):
-        print(f'Requesting direct index {idx} of size {len(self.anchors)}')
+        # print(f'Requesting direct index {idx} of size {len(self.anchors)}')
         anchor = self.loadPointCloudFromPath(self.anchor_sph_images[idx]) if isinstance(
             self.anchor_sph_images[idx], str) else self.anchor_sph_images[idx]
         positive = self.loadPointCloudFromPath(self.positive_sph_images[idx]) if isinstance(
