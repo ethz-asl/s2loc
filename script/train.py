@@ -188,7 +188,42 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
             writer.add_scalar('Validation/Loss_Embedd', loss_embedd, n_iter)
             writer.add_scalar('Validation/Loss', loss, n_iter)
             writer.add_scalar('Validation/Accuracy', val_accs.avg, n_iter)
+
+            anchor_embeddings = np.append(
+                anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1, -1]))
+            positive_embeddings = np.append(
+                positive_embeddings, embedded_p.cpu().data.numpy().reshape([1, -1]))
             n_iter += 1
+    desc_anchors = anchor_embeddings[1:].reshape([n_data, descriptor_size])
+    desc_positives = positive_embeddings[1:].reshape([n_data, descriptor_size])
+    sys.setrecursionlimit(50000)
+    tree = spatial.KDTree(desc_positives)
+    p_norm = 2
+    max_pos_dist = 5.0
+    max_anchor_dist = 1
+    anchor_poses = ds.anchor_poses
+    positive_poses = ds.positive_poses
+    assert len(anchor_poses) == len(positive_poses)
+
+    n_nearest_neighbors = 5
+    loc_count = 0
+    for idx in range(n_data):
+        nn_dists, nn_indices = tree.query(
+            desc_anchors[idx, :], p=p_norm, k=n_nearest_neighbors)
+        nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
+
+        for nn_i in nn_indices:
+            if (nn_i >= n_data):
+                break
+            dist = spatial.distance.euclidean(
+                positive_poses[nn_i, 5:8], anchor_poses[idx, 5:8])
+            if (dist <= max_pos_dist):
+                loc_count = loc_count + 1
+                break
+
+    loc_precision = (loc_count * 1.0) / n_data
+    writer.add_scalar('Validation/Precision/Location', loc_precision, epoch)
+
     return n_iter
 
 

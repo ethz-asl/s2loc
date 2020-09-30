@@ -99,6 +99,9 @@ class DataSource:
         self.anchor_poses = self.loadPoses(path_anchor_poses, n)
         self.positive_poses = self.loadPoses(path_positive_poses, n)
         self.negative_poses = self.loadPoses(path_negative_poses, n)
+        if indices is not None:
+            self.anchor_poses, self.positive_poses, self.negative_poses = self.filterPoses(
+                self.anchor_poses, self.positive_poses, self.negative_poses, n, indices)
 
         print("Done loading dataset.")
         print(f"\tAnchor point clouds total: \t{len(self.anchors)}")
@@ -110,6 +113,10 @@ class DataSource:
         print(f"\tNegative point clouds total: \t{len(self.negatives)}")
         print(f"\tNegative images total: \t\t{len(self.negative_sph_images)}")
         print(f"\tNegative poses total: \t\t{len(self.negative_poses)}")
+
+    def filterPoses(self, a_poses, p_poses, n_poses, n_data, indices):
+        idx = indices[indices < n_data]
+        return a_poses[idx], p_poses[idx], n_poses[idx]
 
     def filterFiles(self, cloud_files, img_files, n_data, indices):
         k = 0
