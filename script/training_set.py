@@ -68,6 +68,7 @@ class TrainingSet(torch.utils.data.Dataset):
         self.negative_features = [
             np.zeros((3, double_bw, double_bw))] * n_clouds
 
+        print(f'Generating features from {self.ds.start_cached} to {self.ds.end_cached}')
         a_img_features, p_img_features, n_img_features = self.ds.get_all_cached_images()
         for i in range(self.ds.start_cached, self.ds.end_cached):
             self.anchor_features[i], self.positive_features[i], self.negative_features[i] = self.createFeature(
@@ -78,7 +79,7 @@ class TrainingSet(torch.utils.data.Dataset):
         if (self.ds is not None):
             return self.loadFromDatasource(index)
         else:
-            return self.loadFromTransformedFeatures(index)
+            return self.loadFromFeatures(index)
 
     def loadFromDatasource(self, index):
         if (index >= self.ds.start_cached) and (index < self.ds.end_cached):
@@ -97,7 +98,7 @@ class TrainingSet(torch.utils.data.Dataset):
 
         return a, p, n
 
-    def loadFromTransformedFeatures(self, index):
+    def loadFromFeatures(self, index):
         return self.anchor_features[index], self.positive_features[index], self.negative_features[index]
 
     def createFeature(self, a_cloud, a_img, p_cloud, p_img, n_cloud, n_img):
@@ -128,9 +129,9 @@ class TrainingSet(torch.utils.data.Dataset):
         positive = torch.from_numpy(self.positive_features[index])
         negative = torch.from_numpy(self.negative_features[index])
 
-        self.anchor_features[index] = None
-        self.positive_features[index] = None
-        self.negative_features[index] = None
+        #self.anchor_features[index] = None
+        #self.positive_features[index] = None
+        #self.negative_features[index] = None
 
         return anchor, positive, negative
 
@@ -266,6 +267,60 @@ class TrainingSet(torch.utils.data.Dataset):
         anchor_visual_transformed_path = f'{anchor_path}visual_transformed{i_feature}.csv'
         positive_visual_transformed_path = f'{positive_path}visual_transformed{i_feature}.csv'
         negative_visual_transformed_path = f'{negative_path}visual_transformed{i_feature}.csv'
+        self.loadFeature(anchor_visual_transformed_path, positive_visual_transformed_path,
+                         negative_visual_transformed_path, i_feature, 2)
+
+    def loadFeatures(self, exported_feature_path, n = -1):
+        k_anchor_path = exported_feature_path + '/anchor/'
+        k_positive_path = exported_feature_path + '/positive/'
+        k_negative_path = exported_feature_path + '/negative/'
+
+        anchor_files = os.listdir(k_anchor_path)
+        positive_files = os.listdir(k_positive_path)
+        negative_files = os.listdir(k_negative_path)
+
+        n_files = len(anchor_files)
+        assert n_files == len(positive_files)
+        assert n_files == len(negative_files)
+
+        n_files_per_feature = int(round(n_files / 3))
+        self.anchor_features = [
+            np.zeros((3, self.bw, self.bw))] * n_files_per_feature
+        self.positive_features = [
+            np.zeros((3, self.bw, self.bw))] * n_files_per_feature
+        self.negative_features = [
+            np.zeros((3, self.bw, self.bw))] * n_files_per_feature
+
+        if n > 0 and n < n_files_per_feature:
+            n_files_per_feature = n
+
+        print(f'Loading {n_files_per_feature} exported features:')
+        for i in tqdm(range(0, n_files_per_feature)):
+            self.loadAllRangeFeatures(
+                k_anchor_path, k_positive_path, k_negative_path, i)
+            self.loadAllIntensityFeatures(
+                k_anchor_path, k_positive_path, k_negative_path, i)
+            self.loadAllVisualFeatures(
+                k_anchor_path, k_positive_path, k_negative_path, i)
+
+    def loadAllRangeFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_range_transformed_path = f'{anchor_path}range{i_feature}.csv'
+        positive_range_transformed_path = f'{positive_path}range{i_feature}.csv'
+        negative_range_transformed_path = f'{negative_path}range{i_feature}.csv'
+        self.loadFeature(anchor_range_transformed_path, positive_range_transformed_path,
+                         negative_range_transformed_path, i_feature, 0)
+
+    def loadAllIntensityFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_intensity_transformed_path = f'{anchor_path}intensity{i_feature}.csv'
+        positive_intensity_transformed_path = f'{positive_path}intensity{i_feature}.csv'
+        negative_intensity_transformed_path = f'{negative_path}intensity{i_feature}.csv'
+        self.loadFeature(anchor_intensity_transformed_path, positive_intensity_transformed_path,
+                         negative_intensity_transformed_path, i_feature, 1)
+
+    def loadAllVisualFeatures(self, anchor_path, positive_path, negative_path, i_feature):
+        anchor_visual_transformed_path = f'{anchor_path}visual{i_feature}.csv'
+        positive_visual_transformed_path = f'{positive_path}visual{i_feature}.csv'
+        negative_visual_transformed_path = f'{negative_path}visual{i_feature}.csv'
         self.loadFeature(anchor_visual_transformed_path, positive_visual_transformed_path,
                          negative_visual_transformed_path, i_feature, 2)
 

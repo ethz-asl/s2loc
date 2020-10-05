@@ -10,19 +10,24 @@ import numpy as np
 from plyfile import PlyData, PlyElement
 
 def progresser(ply_file, auto_position=True, write_safe=False, blocking=True, progress=False):
-    plydata = PlyData.read(ply_file)
-    vertex = plydata['vertex']
-    x = vertex['x']
-    y = vertex['y']
-    z = vertex['z']
-    if 'scalar' in vertex._property_lookup:
-        i = vertex['scalar']
-    elif 'intensity' in vertex._property_lookup:
-        i = vertex['intensity']
-    else:
-        i = plydata['vertex'][plydata.elements[0].properties[3].name]
+    try:
+        plydata = PlyData.read(ply_file)
+        vertex = plydata['vertex']
+        x = vertex['x']
+        y = vertex['y']
+        z = vertex['z']
+        if 'scalar' in vertex._property_lookup:
+            i = vertex['scalar']
+        elif 'intensity' in vertex._property_lookup:
+            i = vertex['intensity']
+        else:
+            i = plydata['vertex'][plydata.elements[0].properties[3].name]
+        return np.concatenate((x, y, z, i), axis=0).reshape(4, len(x)).transpose()
+    except Exception as e:
+        print(f'ERROR reading file {ply_file}.')
+        print(e)
+        return np.empty(4, 1)
 
-    return np.concatenate((x, y, z, i), axis=0).reshape(4, len(x)).transpose()
 
 
 class DataSource:

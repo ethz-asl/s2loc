@@ -51,7 +51,7 @@ bandwidth = 100
 net = Model(bandwidth).cuda()
 restore = False
 optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
-n_epochs = 5
+n_epochs = 55
 batch_size = 13
 num_workers = 32
 descriptor_size = 256
@@ -64,22 +64,23 @@ feature_dim = bandwidth * 2
 #summary(net, input_size=[(n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim)])
 
 # ## Load the data
-n_data = 100
-cache = n_data
+n_data = 10000
+cache = 1
 #dataset_path = "/mnt/data/datasets/Spherical/training"
-dataset_path = "/media/scratch/berlukas/spherical/"
+#dataset_path = "/media/scratch/berlukas/spherical/"
+dataset_path = "/home/berlukas/data/arche_low_res/"
 db_parser = DatabaseParser(dataset_path)
 
-training_missions, test_missions = MissionIndices.get_arche_high_res()
+training_missions, test_missions = MissionIndices.get_arche_low_res()
 training_indices, test_indices = db_parser.extract_training_and_test_indices(
     training_missions, test_missions)
 idx = np.array(training_indices['idx'].tolist())
-
 
 ds = DataSource(dataset_path, cache)
 ds.load(n_data, idx)
 train_set = TrainingSet(restore, bandwidth)
 train_set.generateAll(ds)
+#train_set.exportGeneratedFeatures('/home/berlukas/data/spherical')
 # train_set.loadTransformedFeatures(
 #'/media/scratch/berlukas/transformed_features')
 
@@ -136,19 +137,26 @@ def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
     for batch_idx, (data1, data2, data3) in enumerate(train_loader):
         data1, data2, data3 = data1.cuda().float(
         ), data2.cuda().float(), data3.cuda().float()
+        if data1.shape != data2.shape or data2.shape != data3.shape:
+            continue;
+
         embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
-        optimizer.zero_grad()
 
         dista, distb, loss_triplet, loss_total = criterion(
             embedded_a, embedded_p, embedded_n)
-        loss_embedd = embedded_a.norm(
-            2) + embedded_p.norm(2) + embedded_n.norm(2)
-        loss = loss_triplet + 0.001 * loss_embedd
-        #loss = loss_triplet
+        loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
+        if (np.isnan(loss_embedd.cpu().data)):
+            loss = loss_triplet
+        else:
+            loss = loss_triplet + 0.001 * loss_embedd
 
         if (np.isnan(loss.cpu().data)):
-                return -1
+            print(f'Loss triplet: {loss_triplet}, Loss embedd: {loss_embedd}')
+            print(f'Happened for batch idx: {batch_idx}')
+            continue
+            #return -1
 
+        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         loss_ += loss_total.item()
@@ -215,7 +223,7 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
             nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
 
             for nn_i in nn_indices:
-                if (nn_i >= n_data):
+                if (nn_i >= val_size):
                     break
                 dist = spatial.distance.euclidean(
                     positive_poses[nn_i, 5:8], anchor_poses[idx, 5:8])
@@ -223,25 +231,22 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
                     loc_count = loc_count + 1
                     break
 
-        loc_precision = (loc_count * 1.0) / n_data
+        loc_precision = (loc_count * 1.0) / val_size
         writer.add_scalar('Validation/Precision/Location', loc_precision, epoch)
 
     return n_iter
 
 
 def test(net, criterion, writer):
-    with open('test_indices.txt', 'wb') as f:
-        np.savetxt(f, np.array(split.test_indices), fmt='%d')
-
     n_iter = 0
     net.eval()
     with torch.no_grad():
-        n_test_data = 100
+        n_test_data = 6000
         n_test_cache = n_test_data
-        ds_test = DataSource('/media/scratch/berlukas/spherical', n_test_cache, -1)
-        idx = np.array(training_indices['idx'].tolist())
-        ds_test.load(n_data, idx)
-        n_test_data = len(ds.anchors)
+        ds_test = DataSource(dataset_path, n_test_cache, -1)
+        idx = np.array(test_indices['idx'].tolist())
+        ds_test.load(n_test_data, idx)
+        n_test_data = len(ds_test.anchors)
         test_set = TrainingSet(restore, bandwidth)
         test_set.generateAll(ds_test)
         n_test_set = len(test_set)
@@ -250,7 +255,7 @@ def test(net, criterion, writer):
             return
         print("Total size of the test set: ", n_test_set)
         test_size = n_test_set
-        test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, shuffle=False, num_workers=1, pin_memory=True, drop_last=False)
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=10, shuffle=False, num_workers=1, pin_memory=True, drop_last=False)
         anchor_poses = ds_test.anchor_poses
         positive_poses = ds_test.positive_poses
         assert len(anchor_poses) == len(positive_poses)
@@ -287,9 +292,9 @@ def test(net, criterion, writer):
         #import pdb; pdb.set_trace()
 
         desc_anchors = anchor_embeddings[1:].reshape(
-            [n_test_data, descriptor_size])
+            [test_size, descriptor_size])
         desc_positives = positive_embeddings[1:].reshape(
-            [n_test_data, descriptor_size])
+            [test_size, descriptor_size])
         print(np.array(desc_positives).shape)
 
         sys.setrecursionlimit(50000)
@@ -303,7 +308,7 @@ def test(net, criterion, writer):
             anchor_count = 0
             idx_count = 0
             loc_count = 0
-            for idx in range(n_test_data):
+            for idx in range(test_size):
                 nn_dists, nn_indices = tree.query(
                     desc_anchors[idx, :], p=p_norm, k=n_nearest_neighbors)
                 nn_indices = [
@@ -335,7 +340,7 @@ def test(net, criterion, writer):
                     loc_count = loc_count + 1
                     break
 
-            loc_precision = (loc_count * 1.0) / n_data
+            loc_precision = (loc_count * 1.0) / test_size
             pos_precision = (pos_count * 1.0) / test_size
             anchor_precision = (anchor_count * 1.0) / test_size
             idx_precision = (idx_count * 1.0) / test_size
@@ -348,7 +353,7 @@ def test(net, criterion, writer):
             writer.add_scalar('Test/Precision/Localization',
                               loc_precision, n_nearest_neighbors)
 
-
+abort = False
 if not restore:
     train_iter = 0
     val_iter = 0
@@ -361,6 +366,7 @@ if not restore:
         train_iter = train(net, criterion, optimizer, writer, epoch, train_iter, loss_, t0)
         if (np.isnan(loss_) or train_iter == -1):
             print('Loss is nan. Aborting')
+            abort = True
             break
 
         val_iter = validate(net, criterion, optimizer, writer, epoch, val_iter)
@@ -374,8 +380,9 @@ else:
 
 # Test
 
-print("Starting testing...")
-torch.cuda.empty_cache()
-test(net, criterion, writer)
-print("Testing finished!")
-writer.close()
+if abort == False:
+    print("Starting testing...")
+    torch.cuda.empty_cache()
+    test(net, criterion, writer)
+    print("Testing finished!")
+    writer.close()

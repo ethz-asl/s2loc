@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 class TripletLoss(nn.Module):
     """
@@ -39,6 +40,16 @@ class ImprovedTripletLoss(nn.Module):
     def forward(self, anchor, positive, negative, size_average=True, batch_all=True):
         distance_positive = (anchor - positive).pow(2).sum(1)  # .pow(.5)
         distance_negative = (anchor - negative).pow(2).sum(1)  # .pow(.5)
+        d_pos_cpu = distance_positive.cpu().data
+        d_neg_cpu = distance_negative.cpu().data
+        if (d_pos_cpu < 0).any() or torch.isnan(d_pos_cpu).any():
+            print(f'Distance to positive is smaller than 0 or Nan')
+            print(f'It is: {distance_positive}')
+            distance_positive[torch.isnan(distance_positive)] = 0 
+        if (d_neg_cpu < 0).any() or torch.isnan(d_neg_cpu).any():
+            print(f'Distance to negative is smaller than 0 or Nan')
+            print(f'It is: {distance_negative}')
+            distance_negative[torch.isnan(distance_negative)] = 0 
         losses = F.relu(distance_positive - distance_negative + self.margin) + self.alpha * F.relu(distance_positive - self.margin2)
         if size_average:
             if batch_all:
