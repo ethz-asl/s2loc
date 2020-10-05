@@ -89,6 +89,17 @@ class DataSource:
                 self.all_negative_files, self.all_negative_image_files, n, indices)
             self.anchor_poses, self.positive_poses, self.negative_poses = self.filterPoses(
                 self.anchor_poses, self.positive_poses, self.negative_poses, n, indices)
+        if filter_clusters:
+            non_clustered_indices = self.filterClusters(
+                self.anchor_poses, self.positive_poses)
+            self.all_anchor_files, self.all_anchor_image_files = self.filterFiles(
+                self.all_anchor_files, self.all_anchor_image_files, n, non_clustered_indices)
+            self.all_positive_files, self.all_positive_image_files = self.filterFiles(
+                self.all_positive_files, self.all_positive_image_files, n, non_clustered_indices)
+            self.all_negative_files, self.all_negative_image_files = self.filterFiles(
+                self.all_negative_files, self.all_negative_image_files, n, non_clustered_indices)
+            self.anchor_poses, self.positive_poses, self.negative_poses = self.filterPoses(
+                self.anchor_poses, self.positive_poses, self.negative_poses, n, non_clustered_indices)
 
         print(f"Loading anchors from:\t{path_anchor} and {path_anchor_images}")
         self.anchors = self.loadDataset(self.all_anchor_files, n, self.cache)
@@ -136,7 +147,7 @@ class DataSource:
             non_clustered.append(curr_pose)
             non_clustered_indices.append(i)
         assert len(non_clustered) == len(non_clustered_indices)
-        return non_clustered_indices
+        return np.array(non_clustered_indices)
 
     def filterPoses(self, a_poses, p_poses, n_poses, n_data, indices):
         idx = indices[indices < n_data]
@@ -301,10 +312,12 @@ class DataSource:
 
 
 if __name__ == "__main__":
-    # ds = DataSource("/mnt/data/datasets/Spherical/training", 10)
+    n_data = 100
+    n_cache = n_data
+    ds = DataSource("/mnt/data/datasets/Spherical/test_training/", n_cache)
     #ds = DataSource("/tmp/training", 10)
-    ds = DataSource("/media/scratch/berlukas/spherical", 10)
-    ds.load(10)
+    #ds = DataSource("/media/scratch/berlukas/spherical", 10)
+    ds.load(n_data, filter_clusters=True)
 
     a, p, n = ds.get_all_cached_clouds()
     print(f'len of initial cache {len(a)} of batch [{ds.start_cached}, {ds.end_cached}]')
