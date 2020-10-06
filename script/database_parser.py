@@ -64,10 +64,9 @@ class DatabaseParser(object):
 if __name__ == "__main__":
     db_parser = DatabaseParser('/mnt/data/datasets/Spherical/test_training/')
     #db_parser = DatabaseParser('/tmp/training/')
-    training_missions = ['8d1b..0000', '25b1..0000', 'ef8b..0000', 'b03a..0000', '0167..0000', '472b..0000', '0282..0000',
-                         'e2da..0000', '8a4a..0000', '657d..0000', 'f760..0000', '73cc..0000', '0569..0000', '174e..0000', 'b52f..0000']
-    test_missions = ['89de..0000', '96af..0000', 'd530..0000',
-                     'd662..0000', '62d2..0000', '6fec..0000', 'd778..0000']
+    training_missions = ['7799..0000',
+                         '4e53..0000', 'ab54..0000', '6725..0000']
+    test_missions = ['2d2b..0000', '6d25..0000']
 
     training_indices, test_indices = db_parser.extract_training_and_test_indices(
         training_missions, test_missions)
