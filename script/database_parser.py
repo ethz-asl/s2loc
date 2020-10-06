@@ -29,7 +29,7 @@ class DatabaseParser(object):
 
     def _extract_train_indices(self, missions, missions_df):
         indices = pd.DataFrame()
-        for i in tqdm(range(0, len(missions))):
+        for i in tqdm(range(0, len(missions))):            
             current_df = missions_df[missions_df['mission_anchor']
                                      == missions[i]]
             if current_df.empty:
@@ -48,8 +48,10 @@ class DatabaseParser(object):
     def _extract_test_indices(self, missions, missions_df):
         indices = pd.DataFrame()
         for i in tqdm(range(0, len(missions))):
-            current_from_df = missions_df[missions_df['mission_anchor']
-                                     == missions[i] or missions_df['mission_positive'] == missions[i]]
+            mask = [False] * missions_df['mission_positive'].size
+            mask =  mask | missions_df['mission_anchor'].str.contains(missions[i]).values
+            mask =  mask | missions_df['mission_positive'].str.contains(missions[i]).values
+            current_df = missions_df[mask]
             if current_df.empty:
                 continue
             index_df = pd.DataFrame({'idx': current_df.index})
