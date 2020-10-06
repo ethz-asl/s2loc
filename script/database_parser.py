@@ -19,19 +19,15 @@ class DatabaseParser(object):
         return missions_df
 
     def extract_training_and_test_indices(self, training_missions, test_missions):
-        training_indices = self._extract_sample_indices(training_missions)
-        test_indices = self._extract_sample_indices(test_missions)
+        training_indices = self._extract_train_indices(training_missions, self.missions_df)
+        test_indices = self._extract_test_indices(test_missions, self.missions_df)
         if not training_indices.empty and not test_indices.empty:
             natural_join_test_training = test_indices.join(
                 training_indices.set_index('idx'), on='idx', how='inner')
             assert(natural_join_test_training.size == 0)
         return training_indices, test_indices
 
-    def _extract_sample_indices(self, missions):
-        assert(len(missions) > 0)
-        return self._extract_indices(missions, self.missions_df)
-
-    def _extract_indices(self, missions, missions_df):
+    def _extract_train_indices(self, missions, missions_df):
         indices = pd.DataFrame()
         for i in tqdm(range(0, len(missions))):
             current_df = missions_df[missions_df['mission_anchor']
@@ -44,6 +40,19 @@ class DatabaseParser(object):
                     missions[j]).values
 
             index_df = pd.DataFrame({'idx': current_df[mask].index})
+            indices = indices.append(index_df)
+
+        indices.drop_duplicates()
+        return indices
+    
+    def _extract_test_indices(self, missions, missions_df):
+        indices = pd.DataFrame()
+        for i in tqdm(range(0, len(missions))):
+            current_from_df = missions_df[missions_df['mission_anchor']
+                                     == missions[i] or missions_df['mission_positive'] == missions[i]]
+            if current_df.empty:
+                continue
+            index_df = pd.DataFrame({'idx': current_df.index})
             indices = indices.append(index_df)
 
         indices.drop_duplicates()
