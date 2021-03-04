@@ -15,6 +15,7 @@ class DatabaseParser(object):
         print(f'Reading missions db from {missions_db_path}')
         missions_df = pd.read_csv(missions_db_path, names=[
             'mission_anchor', 'mission_positive', 'mission_negative'], delimiter=',', comment='#', header=None)
+        print(f'Read {missions_df} in total.')
         print(f'Read {int(missions_df.size/3)} entries.')
         return missions_df
 
@@ -29,7 +30,7 @@ class DatabaseParser(object):
 
     def _extract_train_indices(self, missions, missions_df):
         indices = pd.DataFrame()
-        for i in tqdm(range(0, len(missions))):            
+        for i in tqdm(range(0, len(missions))):
             current_df = missions_df[missions_df['mission_anchor']
                                      == missions[i]]
             if current_df.empty:
@@ -44,7 +45,7 @@ class DatabaseParser(object):
 
         indices.drop_duplicates()
         return indices
-    
+
     def _extract_test_indices(self, missions, missions_df):
         indices = pd.DataFrame()
         for i in tqdm(range(0, len(missions))):
@@ -62,11 +63,13 @@ class DatabaseParser(object):
 
 
 if __name__ == "__main__":
-    db_parser = DatabaseParser('/mnt/data/datasets/Spherical/test_training/')
+    #db_parser = DatabaseParser('/mnt/data/datasets/Spherical/test_training/')
+    db_parser = DatabaseParser('/mnt/data/datasets/alice/arche_high_res/')
     #db_parser = DatabaseParser('/tmp/training/')
-    training_missions = ['7799..0000',
-                         '4e53..0000', 'ab54..0000', '6725..0000']
-    test_missions = ['2d2b..0000', '6d25..0000']
+    training_missions = ['8d1b..0000', '25b1..0000', 'ef8b..0000', 'b03a..0000', '0167..0000', '472b..0000', '0282..0000',
+                         'e2da..0000', '8a4a..0000', '657d..0000', 'f760..0000', '73cc..0000', '0569..0000', '174e..0000', 'b52f..0000', '298d..0000']
+    test_missions = ['89de..0000', '96af..0000', 'd530..0000',
+                     'd662..0000', '62d2..0000', '6fec..0000', 'd778..0000']
 
     training_indices, test_indices = db_parser.extract_training_and_test_indices(
         training_missions, test_missions)
