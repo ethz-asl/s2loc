@@ -12,12 +12,13 @@ S2Loc was written using __PyTorch__ ([http://pytorch.org/](http://pytorch.org/))
 
 Submodule references to these repositories can be found in the `lib` folder
 
-To clone this repository:
+
+## Usage
+
+Clone this repository:
 ```
 git clone git@github.com:ethz-asl/s2loc.git --recursive
 ```
-
-## Usage
 
 To train a new model the use `train.py`.
 
