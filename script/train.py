@@ -48,15 +48,16 @@ from visualize import Visualize
 torch.cuda.set_device(0)
 torch.backends.cudnn.benchmark = True
 bandwidth = 100
-net = Model(bandwidth).cuda()
+n_features = 3
+net = Model(n_features,bandwidth).cuda()
 restore = False
-optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.9)
+learning_rate = 4.5e-3
+optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9)
 n_epochs = 55
 batch_size = 13
 num_workers = 32
 descriptor_size = 256
 net_input_size = 2 * bandwidth
-n_features = 3
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 writer = SummaryWriter()
 model_save = 'net_params_phaser.pkl'
@@ -64,25 +65,39 @@ feature_dim = bandwidth * 2
 #summary(net, input_size=[(n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim)])
 
 # ## Load the data
-n_data = 10000
-cache = 1
+n_data = 20000
+#n_data = 22
+cache = n_data
 #dataset_path = "/mnt/data/datasets/Spherical/training"
 #dataset_path = "/media/scratch/berlukas/spherical/"
-dataset_path = "/home/berlukas/data/arche_low_res/"
+dataset_path = "/home/berlukas/data/arche_low_res2/"
+#dataset_path = "/media/scratch/berlukas/spherical/arche_high_res2/"
 db_parser = DatabaseParser(dataset_path)
 
 training_missions, test_missions = MissionIndices.get_arche_low_res()
+#training_missions, test_missions = MissionIndices.get_arche_high_res()
 training_indices, test_indices = db_parser.extract_training_and_test_indices(
     training_missions, test_missions)
 idx = np.array(training_indices['idx'].tolist())
 
 ds = DataSource(dataset_path, cache)
-ds.load(n_data, idx)
 train_set = TrainingSet(restore, bandwidth)
-train_set.generateAll(ds)
-#train_set.exportGeneratedFeatures('/home/berlukas/data/spherical')
-# train_set.loadTransformedFeatures(
-#'/media/scratch/berlukas/transformed_features')
+generate_features = True
+if generate_features:
+    ds.load(n_data, idx, filter_clusters=False)
+    train_set.generateAll(ds)
+    anchor_poses = ds.anchor_poses
+    positive_poses = ds.positive_poses
+    negative_poses = ds.negative_poses
+    train_set.exportGeneratedFeatures('/home/berlukas/data/spherical/arche_low_res_big/')
+else:
+    anchor_poses,positive_poses,negative_poses = train_set.loadFeatures('/home/berlukas/data/spherical/arche_low_res_big/')
+
+# hack for removing the images
+#train_set.anchor_features = train_set.anchor_features[:,0:2,:,:]
+#train_set.positive_features = train_set.positive_features[:,0:2,:,:]
+#train_set.negative_features = train_set.negative_features[:,0:2,:,:]
+
 
 print("Total size: ", len(train_set))
 split = DataSplitter(train_set, restore, test_train_split=1.0, shuffle=True)
@@ -112,7 +127,7 @@ if visualize:
 # ## Train model
 
 
-def adjust_learning_rate_exp(optimizer, epoch_num, lr=5e-3):
+def adjust_learning_rate_exp(optimizer, epoch_num, lr):
     decay_rate = 0.96
     new_lr = lr * math.pow(decay_rate, epoch_num)
     for param_group in optimizer.param_groups:
@@ -133,43 +148,43 @@ def accuracy(dista, distb):
 
 
 def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
+    train_pos_dist = AverageMeter()
+    train_neg_dist = AverageMeter()
     net.train()
     for batch_idx, (data1, data2, data3) in enumerate(train_loader):
         data1, data2, data3 = data1.cuda().float(
         ), data2.cuda().float(), data3.cuda().float()
-        if data1.shape != data2.shape or data2.shape != data3.shape:
-            continue;
+        if np.count_nonzero(data1.cpu().data) == 0:
+            print('DATA IS ZERO AGAIN')
 
+        
         embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
 
         dista, distb, loss_triplet, loss_total = criterion(
             embedded_a, embedded_p, embedded_n)
         loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
-        if (np.isnan(loss_embedd.cpu().data)):
-            loss = loss_triplet
-        else:
-            loss = loss_triplet + 0.001 * loss_embedd
-
-        if (np.isnan(loss.cpu().data)):
-            print(f'Loss triplet: {loss_triplet}, Loss embedd: {loss_embedd}')
-            print(f'Happened for batch idx: {batch_idx}')
-            continue
-            #return -1
+        loss = loss_triplet + 0.001 * loss_embedd
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         loss_ += loss_total.item()
 
+        train_pos_dist.update(dista.cpu().data.numpy().sum())
+        train_neg_dist.update(distb.cpu().data.numpy().sum())
         writer.add_scalar('Train/Loss_Triplet', loss_triplet, n_iter)
         writer.add_scalar('Train/Loss_Embedd', loss_embedd, n_iter)
         writer.add_scalar('Train/Loss', loss, n_iter)
+        writer.add_scalar('Train/Distance/Positive',
+                          train_pos_dist.avg, n_iter)
+        writer.add_scalar('Train/Distance/Negative',
+                          train_neg_dist.avg, n_iter)
         n_iter += 1
 
-        if batch_idx % 50 == 49:
+        if batch_idx % 5 == 4:
             t1 = time.time()
-            print('[Epoch %d, Batch %4d] loss: %.5f time: %.5f lr: %.3e' %
-                  (epoch + 1, batch_idx + 1, loss_ / 100, (t1 - t0) / 60, lr))
+            print('[Epoch %d, Batch %4d] loss: %.8f time: %.5f lr: %.3e' %
+                  (epoch + 1, batch_idx + 1, loss_ / 5, (t1 - t0) / 60, lr))
             t0 = t1
             loss_ = 0.0
     return n_iter
@@ -199,11 +214,14 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
             writer.add_scalar('Validation/Loss', loss, n_iter)
             writer.add_scalar('Validation/Accuracy', val_accs.avg, n_iter)
 
+            '''
             anchor_embeddings = np.append(
                 anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1, -1]))
             positive_embeddings = np.append(
                 positive_embeddings, embedded_p.cpu().data.numpy().reshape([1, -1]))
+            '''
             n_iter += 1
+        '''
         desc_anchors = anchor_embeddings[1:].reshape([val_size, descriptor_size])
         desc_positives = positive_embeddings[1:].reshape([val_size, descriptor_size])
         sys.setrecursionlimit(50000)
@@ -211,8 +229,6 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
         p_norm = 2
         max_pos_dist = 5.0
         max_anchor_dist = 1
-        anchor_poses = ds.anchor_poses
-        positive_poses = ds.positive_poses
         assert len(anchor_poses) == len(positive_poses)
 
         n_nearest_neighbors = 5
@@ -233,6 +249,7 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
 
         loc_precision = (loc_count * 1.0) / val_size
         writer.add_scalar('Validation/Precision/Location', loc_precision, epoch)
+        '''
 
     return n_iter
 
@@ -241,7 +258,7 @@ def test(net, criterion, writer):
     n_iter = 0
     net.eval()
     with torch.no_grad():
-        n_test_data = 6000
+        n_test_data = 3000
         n_test_cache = n_test_data
         ds_test = DataSource(dataset_path, n_test_cache, -1)
         idx = np.array(test_indices['idx'].tolist())
@@ -289,13 +306,10 @@ def test(net, criterion, writer):
                 positive_embeddings, embedded_p.cpu().data.numpy().reshape([1, -1]))
             n_iter = n_iter + 1
 
-        #import pdb; pdb.set_trace()
-
         desc_anchors = anchor_embeddings[1:].reshape(
             [test_size, descriptor_size])
         desc_positives = positive_embeddings[1:].reshape(
             [test_size, descriptor_size])
-        print(np.array(desc_positives).shape)
 
         sys.setrecursionlimit(50000)
         tree = spatial.KDTree(desc_positives)
@@ -304,9 +318,6 @@ def test(net, criterion, writer):
         max_loc_dist = 5.0
         max_anchor_dist = 1
         for n_nearest_neighbors in range(1, 21):
-            pos_count = 0
-            anchor_count = 0
-            idx_count = 0
             loc_count = 0
             for idx in range(test_size):
                 nn_dists, nn_indices = tree.query(
@@ -315,41 +326,13 @@ def test(net, criterion, writer):
                     nn_indices] if n_nearest_neighbors == 1 else nn_indices
 
                 for nn_i in nn_indices:
-                    if (nn_i >= test_size):
-                        break
                     dist = spatial.distance.euclidean(
-                        desc_positives[nn_i, :], desc_positives[idx, :])
+                        positive_poses[nn_i, 5:8], anchor_poses[idx, 5:8])
                     if (dist <= max_pos_dist):
-                        pos_count = pos_count + 1
+                        loc_count = loc_count + 1
                         break
-                for nn_i in nn_indices:
-                    if (nn_i >= test_size):
-                        break
-                    dist = spatial.distance.euclidean(
-                        desc_positives[nn_i, :], desc_anchors[idx, :])
-                    if (dist <= max_anchor_dist):
-                        anchor_count = anchor_count + 1
-                        break
-                for nn_i in nn_indices:
-                    if (nn_i == idx):
-                        idx_count = idx_count + 1
-                        break
-                dist = spatial.distance.euclidean(
-                    positive_poses[nn_i, 5:8], anchor_poses[idx, 5:8])
-                if (dist <= max_pos_dist):
-                    loc_count = loc_count + 1
-                    break
 
             loc_precision = (loc_count * 1.0) / test_size
-            pos_precision = (pos_count * 1.0) / test_size
-            anchor_precision = (anchor_count * 1.0) / test_size
-            idx_precision = (idx_count * 1.0) / test_size
-            writer.add_scalar('Test/Precision/Positive_Distance',
-                              pos_precision, n_nearest_neighbors)
-            writer.add_scalar('Test/Precision/Anchor_Distance',
-                              anchor_precision, n_nearest_neighbors)
-            writer.add_scalar('Test/Precision/Index_Count',
-                              idx_precision, n_nearest_neighbors)
             writer.add_scalar('Test/Precision/Localization',
                               loc_precision, n_nearest_neighbors)
 
@@ -360,7 +343,7 @@ if not restore:
     loss_ = 0.0
     print(f'Starting training using {n_epochs} epochs')
     for epoch in tqdm(range(n_epochs)):
-        lr = adjust_learning_rate_exp(optimizer, epoch_num=epoch)
+        lr = adjust_learning_rate_exp(optimizer, epoch_num=epoch, lr=learning_rate)
         t0 = time.time()
 
         train_iter = train(net, criterion, optimizer, writer, epoch, train_iter, loss_, t0)

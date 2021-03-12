@@ -5,10 +5,11 @@ from os import listdir, path
 
 import numpy as np
 
+import open3d as o3d
 from plyfile import PlyData, PlyElement
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
-
+from scipy.spatial.transform import Rotation as R
 
 def progresser(ply_file, auto_position=True, write_safe=False, blocking=True, progress=False):
     try:
@@ -31,7 +32,7 @@ def progresser(ply_file, auto_position=True, write_safe=False, blocking=True, pr
 
 
 class DataSource:
-    def __init__(self, path_to_datasource, cache=-1, skip_nth=-1):
+    def __init__(self, path_to_datasource, cache=-1, skip_nth=-1, load_negatives = True):
         self.datasource = path_to_datasource
         self.anchors = None
         self.anchor_sph_images = None
@@ -53,6 +54,7 @@ class DataSource:
         self.anchor_poses = []
         self.positive_poses = []
         self.negative_poses = []
+        self.load_negatives = load_negatives
 
     def load(self, n=-1, indices=None, filter_clusters=False):
         path_anchor = self.datasource + "/training_anchor_pointclouds/"
@@ -85,21 +87,24 @@ class DataSource:
                 self.all_anchor_files, self.all_anchor_image_files, n, indices)
             self.all_positive_files, self.all_positive_image_files = self.filterFiles(
                 self.all_positive_files, self.all_positive_image_files, n, indices)
-            self.all_negative_files, self.all_negative_image_files = self.filterFiles(
-                self.all_negative_files, self.all_negative_image_files, n, indices)
             self.anchor_poses, self.positive_poses, self.negative_poses = self.filterPoses(
                 self.anchor_poses, self.positive_poses, self.negative_poses, n, indices)
+            if self.load_negatives:
+                self.all_negative_files, self.all_negative_image_files = self.filterFiles(
+                    self.all_negative_files, self.all_negative_image_files, n, indices)
+            
         if filter_clusters:
             non_clustered_indices = self.filterClusters(
                 self.anchor_poses, self.positive_poses)
             self.all_anchor_files, self.all_anchor_image_files = self.filterFiles(
                 self.all_anchor_files, self.all_anchor_image_files, n, non_clustered_indices)
             self.all_positive_files, self.all_positive_image_files = self.filterFiles(
-                self.all_positive_files, self.all_positive_image_files, n, non_clustered_indices)
-            self.all_negative_files, self.all_negative_image_files = self.filterFiles(
-                self.all_negative_files, self.all_negative_image_files, n, non_clustered_indices)
+                self.all_positive_files, self.all_positive_image_files, n, non_clustered_indices)            
             self.anchor_poses, self.positive_poses, self.negative_poses = self.filterPoses(
                 self.anchor_poses, self.positive_poses, self.negative_poses, n, non_clustered_indices)
+            if self.load_negatives:
+                self.all_negative_files, self.all_negative_image_files = self.filterFiles(
+                    self.all_negative_files, self.all_negative_image_files, n, non_clustered_indices)
 
         print(f"Loading anchors from:\t{path_anchor} and {path_anchor_images}")
         self.anchors = self.loadDataset(self.all_anchor_files, n, self.cache)
@@ -112,11 +117,12 @@ class DataSource:
         self.positive_sph_images = self.loadDataset(
             self.all_positive_image_files, n, self.cache)
 
-        print(f"Loading negatives from:\t{path_negatives} and {path_negative_images}")
-        self.negatives = self.loadDataset(
-            self.all_negative_files, n, self.cache)
-        self.negative_sph_images = self.loadDataset(
-            self.all_negative_image_files, n, self.cache)
+        if self.load_negatives:
+            print(f"Loading negatives from:\t{path_negatives} and {path_negative_images}")
+            self.negatives = self.loadDataset(
+                self.all_negative_files, n, self.cache)
+            self.negative_sph_images = self.loadDataset(
+                self.all_negative_image_files, n, self.cache)
 
         print("Done loading dataset.")
         print(f"\tAnchor point clouds total: \t{len(self.anchors)}")
@@ -125,14 +131,15 @@ class DataSource:
         print(f"\tPositive point clouds total: \t{len(self.positives)}")
         print(f"\tPositive images total: \t\t{len(self.positive_sph_images)}")
         print(f"\tPositive poses total: \t\t{len(self.positive_poses)}")
-        print(f"\tNegative point clouds total: \t{len(self.negatives)}")
-        print(f"\tNegative images total: \t\t{len(self.negative_sph_images)}")
-        print(f"\tNegative poses total: \t\t{len(self.negative_poses)}")
+        if self.load_negatives:
+            print(f"\tNegative point clouds total: \t{len(self.negatives)}")
+            print(f"\tNegative images total: \t\t{len(self.negative_sph_images)}")
+            print(f"\tNegative poses total: \t\t{len(self.negative_poses)}")
 
     def filterClusters(self, anchor_poses, positive_poses):
         n_poses = len(anchor_poses)
         assert n_poses == len(positive_poses)
-        k_dist_threshold = 4.5
+        k_dist_threshold = 0.05
         non_clustered = [anchor_poses[0, 5:8]]
         non_clustered_indices = [0]
         for i in range(1, n_poses):
@@ -143,7 +150,7 @@ class DataSource:
             if min_dist < k_dist_threshold:
                 continue
             min_idx = np.where(distances == min_dist)
-            print(f'Minimum distance is {min_dist} at index {min_idx[0][0]} for sample {i}')
+            #print(f'Minimum distance is {min_dist} at index {min_idx[0][0]} for sample {i}')
             non_clustered.append(curr_pose)
             non_clustered_indices.append(i)
         assert len(non_clustered) == len(non_clustered_indices)
@@ -270,14 +277,24 @@ class DataSource:
     def get_all_cached_clouds(self):
         return self.get_cached_clouds(self.start_cached, self.end_cached)
 
+    def get_and_remove_all_cached_clouds(self):
+        return self.get_cached_clouds(self.start_cached, self.end_cached) 
+        #self.anchors = []
+        #self.positives = []
+        #self.negatives = []
+
     def get_cached_clouds(self, start, end):
         assert start <= end
         start = max(0, start)
         end = min(self.ds_total_size, end)
 
-        return self.anchors[start:end], \
-            self.positives[start:end], \
-            self.negatives[start:end]
+        if self.load_negatives:
+            return self.anchors[start:end], \
+                self.positives[start:end], \
+                self.negatives[start:end]
+        else:
+            return self.anchors[start:end], \
+                self.positives[start:end]
 
     def get_all_cached_images(self):
         return self.get_cached_images(self.start_cached, self.end_cached)
@@ -286,9 +303,13 @@ class DataSource:
         assert start <= end
         start = max(0, start)
         end = min(self.ds_total_size, end)
-        return self.anchor_sph_images[start:end], \
-            self.positive_sph_images[start:end], \
-            self.negative_sph_images[start:end]
+        if self.load_negatives:
+            return self.anchor_sph_images[start:end], \
+                self.positive_sph_images[start:end], \
+                self.negative_sph_images[start:end]
+        else:
+            return self.anchor_sph_images[start:end], \
+                self.positive_sph_images[start:end]
 
     def load_clouds_directly(self, idx):
         # print(f'Requesting direct index {idx} of size {len(self.anchors)}')
@@ -309,6 +330,40 @@ class DataSource:
         negative = self.loadPointCloudFromPath(self.negative_sph_images[idx]) if isinstance(
             self.negative_sph_images[idx], str) else self.negative_sph_images[idx]
         return anchor, positive, negative
+
+    def transform_cloud(self, cloud, T):
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(cloud[:, 0:3])
+        pcd.transform(T)
+        dst = np.asarray(pcd.points)
+        return np.column_stack((dst, cloud[:, 3]))
+
+    def rotate_all_positives(self, rpy, angle_deg):
+        r = R.from_euler(rpy, angle_deg, degrees=True)        
+        T = r.as_matrix()
+        t = np.array((0, 0, 0))
+        
+        T = np.column_stack((T, t.transpose()))
+        T = np.vstack((T, [0, 0, 0, 1]))
+        
+        n_clouds = len(self.anchors)
+        for i in range(0, n_clouds):
+            self.positives[i] = self.transform_cloud(self.positives[i], T)
+            
+    def rotate_all_samples(self, rpy, angle_deg):
+        r = R.from_euler(rpy, angle_deg, degrees=True)        
+        T = r.as_matrix()
+        t = np.array((0, 0, 0))
+        
+        T = np.column_stack((T, t.transpose()))
+        T = np.vstack((T, [0, 0, 0, 1]))
+        
+        n_clouds = len(self.anchors)
+        for i in range(0, n_clouds):
+            self.anchors[i] = self.transform_cloud(self.anchors[i], T)
+            self.positives[i] = self.transform_cloud(self.positives[i], T)
+            self.negatives[i] = self.transform_cloud(self.negatives[i], T)
+            
 
 
 if __name__ == "__main__":

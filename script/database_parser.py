@@ -29,7 +29,7 @@ class DatabaseParser(object):
 
     def _extract_train_indices(self, missions, missions_df):
         indices = pd.DataFrame()
-        for i in tqdm(range(0, len(missions))):            
+        for i in tqdm(range(0, len(missions))):
             current_df = missions_df[missions_df['mission_anchor']
                                      == missions[i]]
             if current_df.empty:
@@ -44,7 +44,7 @@ class DatabaseParser(object):
 
         indices.drop_duplicates()
         return indices
-    
+
     def _extract_test_indices(self, missions, missions_df):
         indices = pd.DataFrame()
         for i in tqdm(range(0, len(missions))):
@@ -62,10 +62,11 @@ class DatabaseParser(object):
 
 
 if __name__ == "__main__":
-    db_parser = DatabaseParser('/mnt/data/datasets/Spherical/test_training/')
+    #db_parser = DatabaseParser('/mnt/data/datasets/Spherical/test_training/')
+    db_parser = DatabaseParser('/media/scratch/berlukas/spherical/arche_high_res2/')
     #db_parser = DatabaseParser('/tmp/training/')
     training_missions = ['8d1b..0000', '25b1..0000', 'ef8b..0000', 'b03a..0000', '0167..0000', '472b..0000', '0282..0000',
-                         'e2da..0000', '8a4a..0000', '657d..0000', 'f760..0000', '73cc..0000', '0569..0000', '174e..0000', 'b52f..0000']
+                         'e2da..0000', '8a4a..0000', '657d..0000', 'f760..0000', '73cc..0000', '0569..0000', '174e..0000', 'b52f..0000', '298d..0000']
     test_missions = ['89de..0000', '96af..0000', 'd530..0000',
                      'd662..0000', '62d2..0000', '6fec..0000', 'd778..0000']
 
