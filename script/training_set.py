@@ -1,32 +1,54 @@
+import os
 from functools import partial
 
 import numpy as np
+import gc
+import time
+
 import open3d as o3d
 import pymp
 import torch.utils.data
-import os
 from data_source import DataSource
 from dh_grid import DHGrid
 from sphere import Sphere
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
 
-T_B_L = np.array(
-        [[0.999776464807781,  -0.016285963261510,  0.013460141210110, -0.029098378563024],
-         [0.016299962125963,   0.999865603816677,  -0.000875084243449, 0.121665163511970],
-         [-0.013444131722031,   0.001094290840472,   0.999909050000742, -0.157908708175463],
-         [0, 0, 0, 1]])
+# LiDARMace
+T_B_L_mace = np.array(
+    [[0.999776464807781,  -0.016285963261510,  0.013460141210110, -0.029098378563024],
+     [0.016299962125963,   0.999865603816677,  -0.000875084243449, 0.121665163511970],
+     [-0.013444131722031,   0.001094290840472,  0.999909050000742, -0.157908708175463],
+     [0, 0, 0, 1]])
+# LiDARStick
+T_B_L_stick = np.array(
+    [[0.699172, -0.7149, 0.00870821, -0.100817],
+     [-0.714841, -0.699226, -0.00925541, -0.00368789],
+     [0.0127057, 0.000246142, -0.999919, -0.0998847],
+     [0, 0, 0, 1]])
 
-def transformCloudToIMU(cloud):
+def transformStickCloudToIMU(cloud):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(cloud[:, 0:3])
-    pcd.transform(T_B_L)
+    pcd.transform(T_B_L_stick)
     dst = np.asarray(pcd.points)
-    return np.column_stack((dst, cloud[:,3]))
-    
+    return np.column_stack((dst, cloud[:, 3]))
 
-def progresser(sample, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
-    sample_in_B = transformCloudToIMU(sample)
+def transformMaceCloudToIMU(cloud):
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(cloud[:, 0:3])
+    pcd.transform(T_B_L_mace)
+    dst = np.asarray(pcd.points)
+    return np.column_stack((dst, cloud[:, 3]))
+
+
+def progresser_low_res(sample, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
+    sample_in_B = transformStickCloudToIMU(sample)
+    sample_sphere = Sphere(sample_in_B)
+    return sample_sphere.sampleUsingGrid(grid)
+
+def progresser_high_res(sample, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
+    sample_in_B = transformMaceCloudToIMU(sample)
     sample_sphere = Sphere(sample_in_B)
     return sample_sphere.sampleUsingGrid(grid)
 
@@ -39,44 +61,62 @@ class TrainingSet(torch.utils.data.Dataset):
         self.test_indices = []
         self.cache = None
         self.grid = DHGrid.CreateGrid(bw)
-            
+        self.anchor_features = []
+        self.positive_features = []
+        self.negative_features = []
+    
+
     def generateAll(self, datasource):
         self.ds = datasource
         self.cache = datasource.cache
+        print(f'Generating features from {self.ds.start_cached} to {self.ds.end_cached}')
 
         # Generate features from clouds.
-        if not self.is_restoring:
+        a_pcl_features=None
+        p_pcl_features=None
+        n_pcl_features=None
+        if self.ds.load_negatives:
             (a, p, n) = self.ds.get_all_cached_clouds()
+            a_pcl_features, p_pcl_features, n_pcl_features = self.__genAllCloudFeatures(
+                    a, p, n)
         else:
-            (a, p, n) = self.__loadTestSet()
-        a_pcl_features, p_pcl_features, n_pcl_features = self.__genAllCloudFeatures(
-            a, p, n)
+            (a, p) = self.ds.get_all_cached_clouds()
+            a_pcl_features, p_pcl_features, _ = self.__genAllCloudFeatures(a, p, None)
 
         # Copy all features to the data structure.
         double_bw = 2 * self.bw
-        n_clouds = self.ds.size()
+        n_clouds = len(a_pcl_features)
         self.anchor_features = [np.zeros((3, double_bw, double_bw))] * n_clouds
         self.positive_features = [
             np.zeros((3, double_bw, double_bw))] * n_clouds
         self.negative_features = [
             np.zeros((3, double_bw, double_bw))] * n_clouds
+        
+        if self.ds.load_negatives:
+            a_img_features, p_img_features, n_img_features = self.ds.get_all_cached_images()
+            for i in range(self.ds.start_cached, self.ds.end_cached):
+                self.anchor_features[i], self.positive_features[i], self.negative_features[i] = self.createFeature(
+                    a_pcl_features[i], a_img_features[i], p_pcl_features[i], p_img_features[i], n_pcl_features[i], n_img_features[i])
+            self.negative_features = np.array(self.negative_features)
+        else:
+            a_img_features, p_img_features = self.ds.get_all_cached_images()
+            for i in range(self.ds.start_cached, self.ds.end_cached):
+                self.anchor_features[i], self.positive_features[i] = self.createFeatureForTest(
+                    a_pcl_features[i], a_img_features[i], p_pcl_features[i], p_img_features[i])
 
-        a_img_features, p_img_features, n_img_features = self.ds.get_all_cached_images()
-        for i in range(self.ds.start_cached, self.ds.end_cached):
-            self.anchor_features[i], self.positive_features[i], self.negative_features[i] = self.createFeature(
-                a_pcl_features[i], a_img_features[i], p_pcl_features[i], p_img_features[i], n_pcl_features[i], n_img_features[i])
+        self.anchor_features = np.array(self.anchor_features)
+        self.positive_features = np.array(self.positive_features)
 
     def __getitem__(self, index):
         # isinstance(l[1], str)
         if (self.ds is not None):
             return self.loadFromDatasource(index)
         else:
-            return self.loadFromTransformedFeatures(index)
-    
+            return self.loadFromFeatures(index)
+
     def loadFromDatasource(self, index):
         if (index >= self.ds.start_cached) and (index < self.ds.end_cached):
-            a, p, n = self.get_and_delete_torch_feature(index)
-            return a, p, n
+            return self.get_and_delete_torch_feature(index)
 
         # We reached the end of the current cached batch.
         # Free the current set and cache the next one.
@@ -89,10 +129,9 @@ class TrainingSet(torch.utils.data.Dataset):
             a_cloud, a_img, p_cloud, p_img, n_cloud, n_img)
 
         return a, p, n
-    
-    def loadFromTransformedFeatures(self, index):
+
+    def loadFromFeatures(self, index):
         return self.anchor_features[index], self.positive_features[index], self.negative_features[index]
-        
 
     def createFeature(self, a_cloud, a_img, p_cloud, p_img, n_cloud, n_img):
         double_bw = 2 * self.bw
@@ -101,48 +140,102 @@ class TrainingSet(torch.utils.data.Dataset):
         negative_features = np.zeros((3, double_bw, double_bw))
 
         a_img_feat = np.reshape(a_img.transpose(), (4, double_bw, double_bw))
-        anchor_features[0, :, :] = a_cloud[0, :, :]
-        anchor_features[1, :, :] = a_cloud[1, :, :]
-        anchor_features[2, :, :] = a_img_feat[3, :, :]
+        anchor_features[0, :, :] = np.nan_to_num(a_cloud[0, :, :])
+        anchor_features[1, :, :] = np.nan_to_num(a_cloud[1, :, :])
+        anchor_features[2, :, :] = np.nan_to_num(a_img_feat[3, :, :])
 
         p_img_feat = np.reshape(p_img.transpose(), (4, double_bw, double_bw))
-        positive_features[0, :, :] = p_cloud[0, :, :]
-        positive_features[1, :, :] = p_cloud[1, :, :]
-        positive_features[2, :, :] = p_img_feat[3, :, :]
+        positive_features[0, :, :] = np.nan_to_num(p_cloud[0, :, :])
+        positive_features[1, :, :] = np.nan_to_num(p_cloud[1, :, :])
+        positive_features[2, :, :] = np.nan_to_num(p_img_feat[3, :, :])
 
         n_img_feat = np.reshape(n_img.transpose(), (4, double_bw, double_bw))
-        negative_features[0, :, :] = n_cloud[0, :, :]
-        negative_features[1, :, :] = n_cloud[1, :, :]
-        negative_features[2, :, :] = n_img_feat[3, :, :]
+        negative_features[0, :, :] = np.nan_to_num(n_cloud[0, :, :])
+        negative_features[1, :, :] = np.nan_to_num(n_cloud[1, :, :])
+        negative_features[2, :, :] = np.nan_to_num(n_img_feat[3, :, :])
+        
 
         return anchor_features, positive_features, negative_features
+    
+    def createFeatureForTest(self, a_cloud, a_img, p_cloud, p_img):
+        double_bw = 2 * self.bw
+        anchor_features = np.zeros((3, double_bw, double_bw))
+        positive_features = np.zeros((3, double_bw, double_bw))
+
+        a_img_feat = np.reshape(a_img.transpose(), (4, double_bw, double_bw))
+        anchor_features[0, :, :] = np.nan_to_num(a_cloud[0, :, :])
+        anchor_features[1, :, :] = np.nan_to_num(a_cloud[1, :, :])
+        anchor_features[2, :, :] = np.nan_to_num(a_img_feat[3, :, :])
+
+        p_img_feat = np.reshape(p_img.transpose(), (4, double_bw, double_bw))
+        positive_features[0, :, :] = np.nan_to_num(p_cloud[0, :, :])
+        positive_features[1, :, :] = np.nan_to_num(p_cloud[1, :, :])
+        positive_features[2, :, :] = np.nan_to_num(p_img_feat[3, :, :])
+
+        return anchor_features, positive_features
 
     def get_and_delete_torch_feature(self, index):
         anchor = torch.from_numpy(self.anchor_features[index])
         positive = torch.from_numpy(self.positive_features[index])
-        negative = torch.from_numpy(self.negative_features[index])
-
-        self.anchor_features[index] = None
-        self.positive_features[index] = None
-        self.negative_features[index] = None
-
-        return anchor, positive, negative
+        
+        if self.ds.load_negatives:
+            negative = torch.from_numpy(self.negative_features[index])
+            return anchor, positive, negative
+        return anchor, positive
 
     def __len__(self):
         return len(self.anchor_features)
 
     def __genAllCloudFeatures(self, anchors, positives, negatives):
+        elapsed_s = 0
+        processed = 0
+        
         print("Generating anchor spheres")
+        start = time.time()
         anchor_features = process_map(
-            partial(progresser, grid=self.grid), anchors, max_workers=32)
-        print("Generating positive spheres")
-        positive_features = process_map(
-            partial(progresser, grid=self.grid), positives, max_workers=32)
-        print("Generating negative spheres")
-        negative_features = process_map(
-            partial(progresser, grid=self.grid), negatives, max_workers=32)
+            partial(progresser_high_res, grid=self.grid), anchors, max_workers=32)
+        end = time.time()
+        elapsed_s = elapsed_s + (end - start)
+        processed = processed + len(anchors)
+        print(f'Processing time in total {elapsed_s} for {processed} anchors.')
+        np.save('/home/berlukas/data/spherical/arche_low_res_big/anchor_cloud_features.npy', anchor_features)
+        anchors = []
 
-        print("Generated features")
+        print("Generating positive spheres")
+        start = time.time()
+        positive_features = process_map(
+            partial(progresser_high_res, grid=self.grid), positives, max_workers=32)
+        end = time.time()
+        elapsed_s = elapsed_s + (end - start)
+        processed = processed + len(positives)
+        print(f'Processing time in total {elapsed_s} for {processed} positives.')
+        np.save('/home/berlukas/data/spherical/arche_low_res_big/positive_cloud_features.npy', positive_features)
+        positives = []
+
+        if self.ds.load_negatives:
+            print("Generating negative spheres")
+            start = time.time()
+            negative_features = process_map(
+                partial(progresser_high_res, grid=self.grid), negatives, max_workers=32)
+            end = time.time()
+            elapsed_s = elapsed_s + (end - start)
+            processed = processed + len(negatives)
+            print(f'Processing time in total {elapsed_s} for {processed} negatives.')
+            np.save('/home/berlukas/data/spherical/arche_low_res_big/negative_cloud_features.npy', negative_features)
+            negatives = []
+        else:
+            negative_features = None
+        print("Generated all pcl features")
+        
+        #anchor_features = np.load('/home/berlukas/data/spherical/arche_low_res_big/anchor_cloud_features.npy');
+        #positive_features = np.load('/home/berlukas/data/spherical/arche_low_res_big/positive_cloud_features.npy');
+        #negative_features = np.load('/home/berlukas/data/spherical/arche_low_res_big/negative_cloud_features.npy');
+        
+        if processed > 0:
+            print(f'Processing time in total {elapsed_s} for {processed} items.')
+            avg_s = elapsed_s / (processed)
+            print(f'Processing time avg is {avg_s:.5f}')
+
         return anchor_features, positive_features, negative_features
 
     def __gen_all_features_single(self, a, p, n):
@@ -163,97 +256,43 @@ class TrainingSet(torch.utils.data.Dataset):
 
     def isRestoring(self):
         return self.is_restoring
-    
-    def exportGeneratedFeatures(self, export_path):
-        k_anchor_path = export_path + '/anchor/'
-        k_positive_path = export_path + '/positive/'
-        k_negative_path = export_path + '/negative/'
-        
-        n_features = len(self.anchor_features)
-        assert n_features == len(self.positive_features)
-        assert n_features == len(self.negative_features)
-        
-        print(f'Exporting {n_features} generated features:')
-        for i in tqdm(range(0, n_features)):
-            self.exportAllRangeFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
-            self.exportAllIntensityFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
-            self.exportAllVisualFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
-        
-    
-    def exportAllRangeFeatures(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature):
-        anchor_range_feature_path = f'{anchor_feature_path}range{i_feature}.csv'
-        positive_range_feature_path = f'{positive_feature_path}range{i_feature}.csv'
-        negative_range_feature_path = f'{negative_feature_path}range{i_feature}.csv'
-        self.exportFeature(anchor_range_feature_path, positive_range_feature_path, negative_range_feature_path, i_feature, 0)
-    
-    def exportAllIntensityFeatures(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature):
-        anchor_intensity_feature_path = f'{anchor_feature_path}intensity{i_feature}.csv'
-        positive_intensity_feature_path = f'{positive_feature_path}intensity{i_feature}.csv'
-        negative_intensity_feature_path = f'{negative_feature_path}intensity{i_feature}.csv'
-        self.exportFeature(anchor_intensity_feature_path, positive_intensity_feature_path, negative_intensity_feature_path, i_feature, 1)
-        
-    def exportAllVisualFeatures(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature):
-        anchor_visual_feature_path = f'{anchor_feature_path}visual{i_feature}.csv'
-        positive_visual_feature_path = f'{positive_feature_path}visual{i_feature}.csv'
-        negative_visual_feature_path = f'{negative_feature_path}visual{i_feature}.csv'
-        self.exportFeature(anchor_visual_feature_path, positive_visual_feature_path, negative_visual_feature_path, i_feature, 2)
-            
-    def exportFeature(self, anchor_feature_path, positive_feature_path, negative_feature_path, i_feature, feature_idx):
-        anchor_features = self.anchor_features[i_feature][feature_idx,:,:]
-        positive_features = self.positive_features[i_feature][feature_idx,:,:]
-        negative_features = self.negative_features[i_feature][feature_idx,:,:]
-        
-        np.savetxt(anchor_feature_path, anchor_features, delimiter=',')
-        np.savetxt(positive_feature_path, positive_features, delimiter=',')
-        np.savetxt(negative_feature_path, negative_features, delimiter=',')
-        
 
-    def loadTransformedFeatures(self, transformed_feature_path):
-        k_anchor_path = transformed_feature_path + '/anchor/'
-        k_positive_path = transformed_feature_path + '/positive/'
-        k_negative_path = transformed_feature_path + '/negative/'
-        
-        anchor_files = os.listdir(k_anchor_path)
-        positive_files = os.listdir(k_positive_path)
-        negative_files = os.listdir(k_negative_path)
-        
-        n_files = len(anchor_files)
-        assert n_files == len(positive_files)
-        assert n_files == len(negative_files)
-        
-        n_files_per_feature = int(round(n_files / 3))
-        self.anchor_features = [np.zeros((3, self.bw, self.bw))] * n_files_per_feature
-        self.positive_features = [np.zeros((3, self.bw, self.bw))] * n_files_per_feature
-        self.negative_features = [np.zeros((3, self.bw, self.bw))] * n_files_per_feature
-        
-        print(f'Loading {n_files_per_feature} transformed features:')
-        for i in tqdm(range(0,n_files_per_feature)):
-            self.loadAllRangeTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
-            self.loadAllIntensityTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
-            self.loadAllVisualTransformedFeatures(k_anchor_path, k_positive_path, k_negative_path, i)
-        
-    def loadAllRangeTransformedFeatures(self, anchor_path, positive_path, negative_path, i_feature):
-        anchor_range_transformed_path = f'{anchor_path}range_transformed{i_feature}.csv'
-        positive_range_transformed_path = f'{positive_path}range_transformed{i_feature}.csv'
-        negative_range_transformed_path = f'{negative_path}range_transformed{i_feature}.csv'
-        self.loadFeature(anchor_range_transformed_path, positive_range_transformed_path, negative_range_transformed_path, i_feature, 0)
-        
-    def loadAllIntensityTransformedFeatures(self, anchor_path, positive_path, negative_path, i_feature):
-        anchor_intensity_transformed_path = f'{anchor_path}intensity_transformed{i_feature}.csv'
-        positive_intensity_transformed_path = f'{positive_path}intensity_transformed{i_feature}.csv'
-        negative_intensity_transformed_path = f'{negative_path}intensity_transformed{i_feature}.csv'
-        self.loadFeature(anchor_intensity_transformed_path, positive_intensity_transformed_path, negative_intensity_transformed_path, i_feature, 1)
-        
-    def loadAllVisualTransformedFeatures(self, anchor_path, positive_path, negative_path, i_feature):
-        anchor_visual_transformed_path = f'{anchor_path}visual_transformed{i_feature}.csv'
-        positive_visual_transformed_path = f'{positive_path}visual_transformed{i_feature}.csv'
-        negative_visual_transformed_path = f'{negative_path}visual_transformed{i_feature}.csv'
-        self.loadFeature(anchor_visual_transformed_path, positive_visual_transformed_path, negative_visual_transformed_path, i_feature, 2)
-        
-    def loadFeature(self, anchor_transformed_path, positive_transformed_path, negative_transformed_path, i_feature, feature_idx):
-        self.anchor_features[i_feature][feature_idx, :, :] = np.loadtxt(anchor_transformed_path, delimiter=',')
-        self.positive_features[i_feature][feature_idx, :, :] = np.loadtxt(positive_transformed_path, delimiter=',')
-        self.negative_features[i_feature][feature_idx, :, :] = np.loadtxt(negative_transformed_path, delimiter=',')
+    def exportGeneratedFeatures(self, export_path):
+        k_anchor_features_path = export_path + '/anchor_features.npy'
+        k_positive_features_path = export_path + '/positiv_featurese.npy'
+        k_negative_features_path = export_path + '/negativ_featurese.npy'
+        k_anchor_poses_path = export_path + '/anchor_poses.npy'
+        k_positive_poses_path = export_path + '/positiv_poses.npy'
+        k_negative_poses_path = export_path + '/negativ_poses.npy'
+
+        np.save(k_anchor_features_path, self.anchor_features)
+        np.save(k_positive_features_path, self.positive_features)
+        np.save(k_negative_features_path, self.negative_features)
+
+        np.save(k_anchor_poses_path, np.array(self.ds.anchor_poses))
+        np.save(k_positive_poses_path, np.array(self.ds.positive_poses))
+        np.save(k_negative_poses_path, np.array(self.ds.negative_poses))
+
+    def loadFeatures(self, export_path):
+        k_anchor_features_path = export_path + '/anchor_features.npy'
+        k_positive_features_path = export_path + '/positiv_featurese.npy'
+        k_negative_features_path = export_path + '/negativ_featurese.npy'
+        k_anchor_poses_path = export_path + '/anchor_poses.npy'
+        k_positive_poses_path = export_path + '/positiv_poses.npy'
+        k_negative_poses_path = export_path + '/negativ_poses.npy'
+
+        # load features
+        self.anchor_features = np.load(k_anchor_features_path)
+        self.positive_features = np.load(k_positive_features_path)
+        self.negative_features = np.load(k_negative_features_path)
+
+        # load poses
+        anchor_poses = np.load(k_anchor_poses_path)
+        positive_poses = np.load(k_positive_poses_path)
+        negative_poses = np.load(k_negative_poses_path)
+
+
+        return anchor_poses, positive_poses, negative_poses
 
 if __name__ == "__main__":
     cache = 10

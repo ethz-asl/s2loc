@@ -31,8 +31,12 @@ class Sphere:
 
                 # TODO(lbern): Average over all neighbors
                 for cur_idx in nn_idx:
-                    features[0, i, j] = self.ranges[cur_idx]
-                    features[1, i, j] = self.intensity[cur_idx]
+                    range_value = self.ranges[cur_idx]
+                    range_value = range_value if not np.isnan(range_value) else 0
+                    intensity = self.intensity[cur_idx]
+                    intensity = intensity if not np.isnan(intensity) else 0
+                    features[0, i, j] = range_value
+                    features[1, i, j] = intensity
 
         return features
 

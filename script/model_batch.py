@@ -5,12 +5,12 @@ import numpy as np
 from s2cnn import so3_near_identity_grid, S2Convolution, s2_near_identity_grid, SO3Convolution, so3_integrate
 
 class Model(nn.Module):
-    def __init__(self, n_features, bandwidth=100):
+    def __init__(self, bandwidth=100):
         super().__init__() # call the initialization function of father class (nn.Module)
 
-        self.features = [n_features, 10, 20, 60, 100, 200]
+        self.features = [3, 10, 20, 60, 100, 200]
         #self.bandwidths = [bandwidth, 50, 25, 20, 10, 5] 
-        self.bandwidths = [bandwidth, 50, 40, 30, 20, 5] 
+        self.bandwidths = [bandwidth, 50, 30, 20, 10, 5] 
         #self.bandwidths = [bandwidth, 100, 50, 25, 20, 10] 
 
         assert len(self.bandwidths) == len(self.features)
@@ -29,7 +29,7 @@ class Model(nn.Module):
                 b_in  = self.bandwidths[0],
                 b_out = self.bandwidths[1],
                 grid=grid_s2),
-            nn.PReLU(),
+            nn.ReLU(inplace=False),
             nn.BatchNorm3d(self.features[1], affine=True),
             SO3Convolution(
                 nfeature_in  = self.features[1],
@@ -37,7 +37,7 @@ class Model(nn.Module):
                 b_in  = self.bandwidths[1],
                 b_out = self.bandwidths[2],
                 grid=grid_so3_1),
-            nn.PReLU(),
+            nn.ReLU(inplace=False),
             nn.BatchNorm3d(self.features[2], affine=True),
             SO3Convolution(
                 nfeature_in  =  self.features[2],
@@ -45,7 +45,7 @@ class Model(nn.Module):
                 b_in  = self.bandwidths[2],
                 b_out = self.bandwidths[3],
                 grid=grid_so3_2),
-            nn.PReLU(),
+            nn.ReLU(inplace=False),
             nn.BatchNorm3d(self.features[3], affine=True),
             SO3Convolution(
                 nfeature_in  = self.features[3],
@@ -54,7 +54,7 @@ class Model(nn.Module):
                 b_out = self.bandwidths[4],
                 grid=grid_so3_3),
             nn.BatchNorm3d(self.features[4], affine=True),
-            nn.PReLU(),
+            nn.ReLU(inplace=False),
             SO3Convolution(
                 nfeature_in  = self.features[4],
                 nfeature_out = self.features[5],
@@ -62,7 +62,7 @@ class Model(nn.Module):
                 b_out = self.bandwidths[5],
                 grid=grid_so3_4),
             nn.BatchNorm3d(self.features[5], affine=True),
-            nn.PReLU(),
+            nn.ReLU(inplace=False),
             )
 
 
@@ -70,16 +70,14 @@ class Model(nn.Module):
             # linear 1
             nn.BatchNorm1d(self.features[5]),
             nn.Linear(in_features=self.features[5],out_features=512),
-            nn.PReLU(),
-            nn.Dropout(p=0.4),
+            nn.ReLU(inplace=False),
             # linear 2
             nn.BatchNorm1d(512),
             nn.Linear(in_features=512, out_features=256),
-            nn.PReLU(),
-            nn.Dropout(p=0.4),
+            nn.ReLU(inplace=False),
             # linear 3
             nn.BatchNorm1d(256),
-            nn.Linear(in_features=256, out_features=256),
+            nn.Linear(in_features=256, out_features=256)
         )
 
     def forward(self, x1, x2, x3):
