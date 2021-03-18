@@ -1,8 +1,11 @@
+#! /usr/bin/env python2
+
+import rospy
+
 import argparse
 import sys
 
 import numpy as np
-import rospy
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
 from std_srvs.srv import Empty
@@ -10,20 +13,27 @@ from std_srvs.srv import Empty
 from localization_controller import LocalizationController
 from map_building_controller import MapBuildingController
 
-
 class S2LocNode(object):
-    def __init__(self, args):
+    def __init__(self):
         self.ctrl = None
-        if args.mode == "localization":
-            if args.map_folder == "":
+        mode = rospy.get_param("~mode")
+        bw = rospy.get_param("~bw")
+        net = rospy.get_param("~net")
+        descriptor_size = rospy.get_param("~descriptor_size")
+
+        if mode == "localization":
+            map_folder = rospy.get_param("~map_folder")
+            if map_folder == "":
                 print("ERROR: --map_folder must be specified in localization mode.")
                 sys.exit(-1)
             self.ctrl = LocalizationController(
-                args.map_folder, args.bw, args.net, args.descritpor_size)
-        elif args.mode == "map-building":
+                map_folder, bw, net, descritpor_size)
+        elif mode == "map-building":
+            export_map_folder = rospy.get_param("~export_map_folder")
             self.ctrl = MapBuildingController(
-                args.export_map_folder, args.bw, args.net, args.descriptor_size)
+                export_map_folder, bw, net, descriptor_size)
             self.is_detecting = False
+
             self.map_builder_service = rospy.Service(
                 's2loc_build_map', Empty, self.build_descriptor_map)
             self.lc_service = rospy.Service(
@@ -32,12 +42,12 @@ class S2LocNode(object):
                 's2loc_clear_map', Empty, self.clear_descriptor_map)
             print("Waiting for map point clouds.")
         else:
-            print("ERROR: no valid mode specified: ", args.mode)
+            print("ERROR: no valid mode specified: ", mode)
             sys.exit(-1)
 
-        rospy.init_node('S2LocNode', anonymous=True)
+        pc_topic = rospy.get_param("~pc_topic")
         self.pc_sub = rospy.Subscriber(
-            args.pc_topic, PointCloud2, self.laser_callback)
+            pc_topic, PointCloud2, self.laser_callback)
 
     def laser_callback(self, cloud_msg):
         if self.is_detecting:
@@ -65,29 +75,11 @@ class S2LocNode(object):
             points_list.append([data[0], data[1], data[2], data[3]])
         return np.array(points_list)
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("mode", type=str, default="map-building",
-                        help="Defines the mode of the node: map-building or localization.")
-    parser.add_argument("--verbosity", type=int,
-                        default=3, help="Verbosity level.")
-    parser.add_argument("--map_folder", type=str, default="",
-                        help="Defines the location of the descriptor map.")
-    parser.add_argument("--pc_topic", type=str, default="/point_cloud",
-                        help="Sets the topic name for the input point clouds.")
-    parser.add_argument("--net", type=str, default="net_params_new_1.pkl",
-                        help="Sets the file name for the network.")
-    parser.add_argument("--bw", type=int, default=100,
-                        help="Defines the used spherical bandwidth.")
-    parser.add_argument("--descriptor_size", type=int, default=128,
-                        help="Defines the size of the descriptor.")
-    parser.add_argument("--export_map_folder", type=str, default="",
-                        help="If defined the created descriptor map will be exported to this folder.")
-    args = parser.parse_args()
+    rospy.init_node('S2LocNode')
     print("=== Running S2Loc Node ====================")
     try:
-        s2loc = S2LocNode(args)
+        s2loc = S2LocNode()
         rospy.spin()
     except rospy.ROSInterruptException:
         pass

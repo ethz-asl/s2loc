@@ -1,0 +1,13 @@
+# General setup.
+mode:              map-building
+verbosity:         3
+export_map_folder: ""
+pc_topic:          ""
+
+# Specific for localization mode
+map_folder:        ""
+
+# Network specific setup.
+net:               ""
+bw:                100
+descriptor_size:   128
