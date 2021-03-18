@@ -6,7 +6,6 @@ import argparse
 import sys
 
 import numpy as np
-import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
 from maplab_msgs.msg import Submap, DenseNode
 from std_srvs.srv import Empty
