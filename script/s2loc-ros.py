@@ -1,4 +1,4 @@
-#! /usr/bin/env python2
+#! /usr/bin/env python3
 
 import rospy
 
@@ -8,6 +8,7 @@ import sys
 import numpy as np
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
+from maplab_msgs.msg import Submap, DenseNode
 from std_srvs.srv import Empty
 
 from localization_controller import LocalizationController
@@ -30,8 +31,8 @@ class S2LocNode(object):
                 map_folder, bw, net, descritpor_size)
         elif mode == "map-building":
             export_map_folder = rospy.get_param("~export_map_folder")
-            self.ctrl = MapBuildingController(
-                export_map_folder, bw, net, descriptor_size)
+            #self.ctrl = MapBuildingController(
+                #export_map_folder, bw, net, descriptor_size)
             self.is_detecting = False
 
             self.map_builder_service = rospy.Service(
@@ -47,14 +48,14 @@ class S2LocNode(object):
 
         pc_topic = rospy.get_param("~pc_topic")
         self.pc_sub = rospy.Subscriber(
-            pc_topic, PointCloud2, self.laser_callback)
+            pc_topic, Submap, self.laser_callback)
 
     def laser_callback(self, cloud_msg):
         if self.is_detecting:
             return
-        cloud = self.__convert_msg_to_array(cloud_msg)
+        #cloud = self.__convert_msg_to_array(cloud_msg)
         print(f'Received pc with size {cloud.size}  and shape {cloud.shape}')
-        self.ctrl.handle_point_cloud(cloud_msg.header.stamp, cloud)
+        #self.ctrl.handle_point_cloud(cloud_msg.header.stamp, cloud)
 
     def detect_lc(self, request):
         self.is_detecting = True
@@ -68,12 +69,9 @@ class S2LocNode(object):
     def clear_descriptor_map(self, request):
         self.ctrl.clear_descriptor_map()
 
-    def __convert_msg_to_array(self, cloud_msg):
-        points_list = []
-        for data in pc2.read_points(cloud_msg, skip_nans=True):
-            print('Point cloud length: ', len(data))
-            points_list.append([data[0], data[1], data[2], data[3]])
-        return np.array(points_list)
+
+    def __convert_submap_msg_to_array(self, cloud_msg):
+
 
 if __name__ == "__main__":
     rospy.init_node('S2LocNode')
