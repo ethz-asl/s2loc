@@ -2,7 +2,7 @@
 mode:              map-building
 verbosity:         3
 export_map_folder: ""
-pc_topic:          ""
+pc_topic:          "/maplab_server/sparse_graph/submap"
 
 # Specific for localization mode
 map_folder:        ""

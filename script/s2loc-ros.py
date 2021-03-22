@@ -60,7 +60,7 @@ class S2LocNode(object):
         if self.is_detecting:
             return
         #cloud = self.__convert_msg_to_array(cloud_msg)
-        print(f'Received submap from {cloud_msg.robotname} with {len(cloud_msg.nodes)} nodes.')
+        print(f'Received submap from {cloud_msg.robot_name} with {len(cloud_msg.nodes)} nodes.')
         #self.ctrl.handle_point_cloud(cloud_msg.header.stamp, cloud)
 
     def detect_lc(self, request):
@@ -76,7 +76,7 @@ class S2LocNode(object):
         self.ctrl.clear_descriptor_map()
 
 
-    def __convert_submap_msg_to_array(self, cloud_msg):
+    #def __convert_submap_msg_to_array(self, cloud_msg):
 
 
 if __name__ == "__main__":
