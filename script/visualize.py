@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 class Visualize:
 
-    def visualizeRawPointCloud(self, sphere, jupyter = False):
+    def visualizeRawPointCloudFromSphere(self, sphere, jupyter = False):
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(sphere.point_cloud[:, 0:3])
         colors = self.__mapIntensityToRGB(sphere.intensity)
@@ -18,13 +18,25 @@ class Visualize:
             self.__visualizeJupyter(pcd)
         else:
             o3d.visualization.draw_geometries([pcd])
+
+    def visualizeRawPointCloud(self, cloud, jupyter = False):
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(cloud[:, 0:3])
+        colors = self.__mapIntensityToRGB(cloud[:, 3])
+        pcd.colors = o3d.utility.Vector3dVector(colors[:,0:3])
+
+        if jupyter:
+            self.__visualizeJupyter(pcd)
+        else:
+            o3d.visualization.draw_geometries([pcd])
+
     def visualizeSphere(self, sphere, jupyter = False):
         pcd = o3d.geometry.PointCloud()
         cart_sphere = sphere.getProjectedInCartesian()
         self.visualizeCartesianSphere(np.column_stack((cart_sphere, sphere.intensity)))
 
     def visualizeCartesianSphere(self, cart_sphere, jupyter = False):
-        pcd = o3d.geometry.PointCloud()        
+        pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(cart_sphere[:, 0:3])
         colors = self.__mapIntensityToRGB(cart_sphere[:,3])
         pcd.colors = o3d.utility.Vector3dVector(colors[:,0:3])
@@ -33,7 +45,7 @@ class Visualize:
             self.__visualizeJupyter(pcd)
         else:
             o3d.visualization.draw_geometries([pcd])
-            
+
     def __visualizeJupyter(self, pcd):
         visualizer = o3d.JVisualizer()
         visualizer.add_geometry(pcd)
