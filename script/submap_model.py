@@ -2,10 +2,15 @@
 
 import rospy
 import numpy as np
+import open3d as o3d
+import sensor_msgs.point_cloud2 as pc2
+
 from maplab_msgs.msg import Submap, DenseNode
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import PointCloud2, PointField
-import sensor_msgs.point_cloud2 as pc2
+
+from utils import Utils
+from visualize import Visualize
 
 class SubmapModel(object):
     def __init__(self):
@@ -16,16 +21,26 @@ class SubmapModel(object):
         self.id = 0
         self.poses = []
         self.pointclouds = []
+        self.T_B_L = np.array(
+            [[1, 0, 0, 0.005303],
+             [0, 1, 0, 0.037340],
+             [0, 0, 1, 0.063319],
+             [0, 0, 0, 1]])
 
-    def construct_data(self, msg):
-        n_data = len(msg.nodes)
+    def construct_data(self, submap_msg):
+        n_data = len(submap_msg.nodes)
 
         # Parse general information
-        self.parse_information(msg)
+        self.parse_information(submap_msg)
 
         for i in range(0, n_data):
-            pose, cloud = self.parse_node(msg.nodes[i])
-            self.poses.append(pose)
+            dense_node = submap_msg.nodes[i]
+
+            pos, orien = Utils.convert_pose_stamped_msg_to_array(dense_node.pose)
+            T_G_B = Utils.convert_pos_quat_to_transformation(pos, orien)
+            self.poses.append(T_G_B)
+
+            cloud = Utils.convert_pointcloud2_msg_to_array(dense_node.cloud)
             self.pointclouds.append(cloud)
 
     def parse_information(self, msg):
@@ -42,29 +57,31 @@ class SubmapModel(object):
         self.robot_name = robot_name
         self.id = id
 
-    def parse_node(self, dense_node):
-        pose = self.__convert_pose_stamped_msg_to_array(dense_node.pose)
-        cloud = self.__convert_pointcloud2_msg_to_array(dense_node.cloud)
-        return pose,cloud
+    def compute_dense_map(self):
+        n_poses = len(self.poses)
+        if n_poses == 0:
+            return
 
+        pivot = n_poses // 2
+        T_G_L_pivot = np.matmul(self.poses[pivot], self.T_B_L)
+        T_L_pivot_G = np.linalg.inv(T_G_L_pivot)
 
-    def __convert_pointcloud2_msg_to_array(self, cloud_msg):
-        points_list = []
-        for data in pc2.read_points(cloud_msg, skip_nans=True):
-            points_list.append([data[0], data[1], data[2], data[3]])
-        return np.array(points_list)
+        acc_points = self.pointclouds[pivot]
+        viz = Visualize()
+        for i in range(0, n_poses):
+            if i == pivot:
+                continue
 
-    def __convert_pose_stamped_msg_to_array(self, pose_msg):
-        poses = []
-        poses.append([
-            pose_msg.pose.position.x,
-            pose_msg.pose.position.y,
-            pose_msg.pose.position.z,
-            pose_msg.pose.orientation.w,
-            pose_msg.pose.orientation.x,
-            pose_msg.pose.orientation.y,
-            pose_msg.pose.orientation.z])
-        return np.array(poses)
+            T_G_L = np.matmul(self.poses[i], self.T_B_L)
+            T_L_pivot_L = np.matmul(T_L_pivot_G, T_G_L)
+
+            points = Utils.transform_pointcloud(self.pointclouds[i], T_L_pivot_L)
+            acc_points = np.append(acc_points, points, axis=0)
+
+        print(f"pivot points shape {acc_points.shape}")
+        viz.visualizeRawPointCloud(acc_points)
+        return acc_points
+
 
 if __name__ == "__main__":
     rospy.init_node('foo')
