@@ -11,7 +11,7 @@ from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
 
 
-def progresser(sample, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
+def progresser(submap, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
     sample_sphere = Sphere(sample)
     return sample_sphere.sampleUsingGrid(grid)
 
@@ -19,7 +19,7 @@ def progresser(sample, grid, auto_position=True, write_safe=False, blocking=True
 class EvaluationSet(torch.utils.data.Dataset):
     def __init__(self, clouds, bw=100):
         self.bw = bw
-        self.features = self.__genAllFeatures(bw, clouds)
+        self.features = self.__genAllFeatures(clouds, bw)
 
     def __getitem__(self, index):
         return torch.from_numpy(self.features[index])
@@ -27,10 +27,13 @@ class EvaluationSet(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.features)
 
-    def __genAllFeatures(self, bw, clouds):
+    def __genAllFeatures(self, clouds, bw):
         n_ds = len(clouds)
         grid = DHGrid.CreateGrid(bw)
-        print("Generating spheres")
+        print(f"Generating spheres for {len(clouds)} submaps")
+
+        clouds = generate
+
         features = process_map(
             partial(progresser, grid=grid), clouds, max_workers=32)
         return features

@@ -21,39 +21,46 @@ class S2LocNode(object):
         net = rospy.get_param("~net")
         descriptor_size = rospy.get_param("~descriptor_size")
 
+        # Configure for the selected mode.
         if mode == "localization":
-            map_folder = rospy.get_param("~map_folder")
-            if map_folder == "":
-                print("ERROR: --map_folder must be specified in localization mode.")
-                sys.exit(-1)
-            self.ctrl = LocalizationController(
-                map_folder, bw, net, descritpor_size)
+            self.setup_localization_mode()
         elif mode == "map-building":
-            export_map_folder = rospy.get_param("~export_map_folder")
-            #self.ctrl = MapBuildingController(
-                #export_map_folder, bw, net, descriptor_size)
-            self.is_detecting = False
-
-            self.map_builder_service = rospy.Service(
-                's2loc_build_map', Empty, self.build_descriptor_map)
-            self.lc_service = rospy.Service(
-                's2loc_detect', Empty, self.detect_lc)
-            self.clear_map_service = rospy.Service(
-                's2loc_clear_map', Empty, self.clear_descriptor_map)
-            print("Waiting for map point clouds.")
+            self.setup_map_building_mode()
         else:
             print("ERROR: no valid mode specified: ", mode)
             sys.exit(-1)
 
         pc_topic = rospy.get_param("~pc_topic")
         self.pc_sub = rospy.Subscriber(
-            pc_topic, Submap, self.laser_callback)
+            pc_topic, Submap, self.submap_callback)
 
-    def laser_callback(self, cloud_msg):
+    def setup_localization_mode(self):
+        map_folder = rospy.get_param("~map_folder")
+        if map_folder == "":
+            print("ERROR: --map_folder must be specified in localization mode.")
+            sys.exit(-1)
+        self.ctrl = LocalizationController(
+            map_folder, bw, net, descritpor_size)
+
+    def setup_map_building_mode(self):
+        export_map_folder = rospy.get_param("~export_map_folder")
+        #self.ctrl = MapBuildingController(
+            #export_map_folder, bw, net, descriptor_size)
+        self.is_detecting = False
+        self.map_builder_service = rospy.Service(
+            's2loc_build_map', Empty, self.build_descriptor_map)
+        self.lc_service = rospy.Service(
+            's2loc_detect', Empty, self.detect_lc)
+        self.clear_map_service = rospy.Service(
+            's2loc_clear_map', Empty, self.clear_descriptor_map)
+        print("Listening for submap messages.")
+
+
+    def submap_callback(self, cloud_msg):
         if self.is_detecting:
             return
         #cloud = self.__convert_msg_to_array(cloud_msg)
-        print(f'Received pc with size {cloud.size}  and shape {cloud.shape}')
+        print(f'Received submap from {cloud_msg.robotname} with {len(cloud_msg.nodes)} nodes.')
         #self.ctrl.handle_point_cloud(cloud_msg.header.stamp, cloud)
 
     def detect_lc(self, request):

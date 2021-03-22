@@ -15,22 +15,20 @@ class MapBuildingController(BaseController):
     def __init__(self, export_map_folder="", bw=100, state_dict='./net_params_new_1.pkl', desc_size=128):
         super().__init__(bw, state_dict, desc_size)
         self.descriptors = None
-        self.clouds = []
-        self.timestamps = []
+        self.submaps = []
         self.export_map_folder = export_map_folder
 
-    def handle_point_cloud(self, ts, cloud):
+    def handle_point_cloud(self, submap):
         # build ts and cloud pairs list
-        self.timestamps.append(ts)
-        self.clouds.append(cloud)
+        self.submaps.append(submap)
+
 
     def clear_clouds(self):
-        self.timestamps = []
-        self.clouds = []
+        self.submaps = []
 
     def build_descriptor_map(self):
         print("Building all descriptors...")
-        self.descriptors = self.describe_all_point_clouds(self.clouds, self.bw)
+        self.descriptors = self.describe_all_point_clouds(self.submaps)
         if self.export_map_folder is not "":
             self.export_descriptors_to_folder(
                 self.export_map_folder, descriptors)
@@ -65,8 +63,8 @@ class MapBuildingController(BaseController):
         print("Finished loop closure lookup.")
         return True
 
-    def describe_all_point_clouds(self, clouds, bw):
-        eval_set = EvaluationSet(clouds, bw)
+    def describe_all_point_clouds(self, submaps):
+        eval_set = EvaluationSet(submaps, self.bw)
         loader = torch.utils.data.DataLoader(
             eval_set, batch_size=1, shuffle=False, num_workers=1, pin_memory=True, drop_last=False)
 
