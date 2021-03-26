@@ -82,6 +82,13 @@ class SubmapModel(object):
         viz.visualizeRawPointCloud(acc_points)
         return acc_points
 
+    def get_pivot_pose(self):
+        n_poses = len(self.poses)
+        if n_poses == 0:
+            return None
+
+        pivot = n_poses // 2
+        reutrn self.poses[pivot]
 
 if __name__ == "__main__":
     rospy.init_node('foo')

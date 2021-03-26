@@ -9,6 +9,7 @@ from base_controller import BaseController
 from evaluation_set import EvaluationSet
 from lc_candidate import LcCandidate
 from model import Model
+from lc_handler import LcHandler
 
 
 class MapBuildingController(BaseController):
@@ -17,11 +18,10 @@ class MapBuildingController(BaseController):
         self.descriptors = None
         self.submaps = []
         self.export_map_folder = export_map_folder
+        self.lc_engine = LcHandler()
 
-    def handle_point_cloud(self, submap):
-        # build ts and cloud pairs list
+    def handle_submap(self, submap):
         self.submaps.append(submap)
-
 
     def clear_clouds(self):
         self.submaps = []
@@ -37,31 +37,7 @@ class MapBuildingController(BaseController):
         if self.descriptors is None:
             print("ERROR: descriptor map is empty.")
             return False
-
-        # build search tree
-        print("Building the kd tree...")
-        self.tree = spatial.KDTree(self.descriptors)
-
-        n_nearest_neighbors = 10
-        p_norm = 2
-        max_distance = 3
-        all_candidates = []
-        for idx in range(len(self.descriptors)):
-            nn_dists, nn_indices = tree.query(
-                self.descriptors[idx, :], p=p_norm, k=n_nearest_neighbors, distance_upper_bound=max_distance)
-            nn_dists, nn_indices = self.fix_nn_output(
-                idx, nn_dists, nn_indices)
-            if not nn_indices or not nn_dists:
-                continue
-            nn_indices = [
-                nn_indices] if n_nearest_neighbors == 1 else nn_indices
-            print(f'Got distances {nn_dists}, with indices {nn_indices}')
-            cand = LcCandidate(
-                self.timestamps[nn_indices], self.clouds[nn_indices])
-            all_candidates.append(cand)
-
-        print("Finished loop closure lookup.")
-        return True
+        return self.lc_engine.find_loop_closures(self.descriptors)
 
     def describe_all_point_clouds(self, submaps):
         eval_set = EvaluationSet(submaps, self.bw)

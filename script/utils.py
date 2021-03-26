@@ -41,3 +41,15 @@ class Utils(object):
         pcd.transform(T)
         dst = np.asarray(pcd.points)
         return np.column_stack((dst, cloud[:, 3]))
+
+    @staticmethod
+    def fix_nn_output(self, idx, nn_dists, nn_indices):
+        self_idx = nn_indices.index(idx)
+        del nn_indices[self_idx]
+        del nn_dists[self_idx]
+
+        fixed_nn_dists = [dists for dists in nn_dists if not (
+            math.isnan(dists) or math.isinf(dists))]
+        fixed_nn_indices = [i for i in nn_indices if not (
+            math.isnan(i) or math.isinf(i))]
+        return fixed_nn_dists, fixed_nn_indices

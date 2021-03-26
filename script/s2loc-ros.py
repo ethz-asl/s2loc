@@ -68,7 +68,7 @@ class S2LocNode(object):
         submap.construct_data(submap_msg)
         submap.compute_dense_map()
         print(f'Received submap from {submap_msg.robot_name} with {len(submap_msg.nodes)} nodes.')
-        #self.ctrl.handle_point_cloud(cloud_msg.header.stamp, cloud)
+        self.ctrl.handle_submap(submap)
 
     def detect_lc(self, request):
         self.is_detecting = True
