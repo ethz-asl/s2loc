@@ -9,7 +9,7 @@ from model import Model
 from utils import Utils
 
 
-class LcHandler(boject):
+class LcHandler(object):
     def __init__(self):
         self.tree = None
 

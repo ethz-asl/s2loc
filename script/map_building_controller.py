@@ -36,6 +36,9 @@ class MapBuildingController(BaseController):
             return None
         return self.alignment_engine.compute_constraints(self.submaps)
 
+    def publish_all_submaps(self):
+        self.alignment_engine.publish_submaps(self.submaps)
+
     # --- SUBMAP DESCRIPTORS --------------------------------------------------
 
     def build_descriptor_map(self):

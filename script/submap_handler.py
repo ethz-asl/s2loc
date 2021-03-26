@@ -2,6 +2,7 @@ import math
 import os
 
 import rospy
+import sensor_msgs.point_cloud2 as pc2
 import numpy as np
 from scipy import spatial
 
@@ -11,9 +12,19 @@ from evaluation_set import EvaluationSet
 from lc_candidate import LcCandidate
 from model import Model
 from reg_box import RegBox
+from utils import Utils
 
 from maplab_msgs.msg import SubmapConstraint
+from std_msgs.msg import Header
+from sensor_msgs.msg import PointCloud2, PointField
 
+# The data structure of each point in ros PointCloud2: 16 bits = x + y + z + rgb
+FIELDS_XYZI = [
+    PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+    PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+    PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+    PointField(name='i', offset=12, datatype=PointField.FLOAT32, count=1),
+]
 
 class SubmapHandler(object):
     def __init__(self):
@@ -21,6 +32,31 @@ class SubmapHandler(object):
         self.n_nearest_neighbors = 3
         self.p_norm = 2
         self.reg_box = RegBox()
+
+        #submap_topic = rospy.get_param("~submap_constraint_topic")
+        map_topic = '/s2loc/map'
+        self.map_pub = rospy.Publisher(map_topic, PointCloud2, queue_size=10)
+
+    def publish_submaps(self, submaps):
+        n_submaps = len(submaps)
+        header = Header()
+        header.stamp = rospy.Time.now()
+        header.frame_id = 'map'
+        map_points = np.zeros((1,4))
+
+        for i in range(0, n_submaps):
+            T_G_L = submaps[i].get_pivot_pose_LiDAR()
+            submap = submaps[i].compute_dense_map()
+            submap[:,3] = i
+            submap_points = Utils.transform_pointcloud(submap, T_G_L)
+            map_points = np.append(map_points, submap_points, axis=0)
+
+        n_points = map_points.shape[0]
+        if n_points > 1:
+            map_points = map_points[1:,:]
+            map_pointcloud_ros = pc2.create_cloud(header, FIELDS_XYZI, map_points)
+            self.map_pub.publish(map_pointcloud_ros)
+            rospy.loginfo(f"Published map with {n_points} points.")
 
     def compute_constraints(self, submaps):
         candidates = self.find_close_submaps(submaps)
@@ -51,7 +87,7 @@ class SubmapHandler(object):
 
     def lookup_closest_submap(self, submap):
         nn_dists, nn_indices = tree.query(
-            submap
+            submap,
             p=self.p_norm,
             k=self.n_nearest_neighbors,
             distance_upper_bound=self.pivot_distance)

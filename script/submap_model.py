@@ -45,7 +45,7 @@ class SubmapModel(object):
             self.pointclouds.append(cloud)
 
             # Parse ts.
-            self.ts.append(dense_node.pose.header.ts)
+            self.ts.append(dense_node.pose.header.stamp)
 
     def parse_information(self, msg):
         ts = msg.header.stamp
@@ -71,7 +71,6 @@ class SubmapModel(object):
         T_L_pivot_G = np.linalg.inv(T_G_L_pivot)
 
         acc_points = self.pointclouds[pivot]
-        viz = Visualize()
         for i in range(0, n_poses):
             if i == pivot:
                 continue
@@ -82,8 +81,6 @@ class SubmapModel(object):
             points = Utils.transform_pointcloud(self.pointclouds[i], T_L_pivot_L)
             acc_points = np.append(acc_points, points, axis=0)
 
-        print(f"pivot points shape {acc_points.shape}")
-        viz.visualizeRawPointCloud(acc_points)
         return acc_points
 
     def get_pivot_pose_IMU(self):

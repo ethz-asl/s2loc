@@ -33,7 +33,7 @@ class S2LocNode(object):
         if mode == "localization":
             self.setup_localization_mode()
         elif mode == "map-building":
-            self.setup_map_building_mode()
+            self.setup_map_building_mode(bw, net, descriptor_size)
         else:
             print("ERROR: no valid mode specified: ", mode)
             sys.exit(-1)
@@ -52,17 +52,14 @@ class S2LocNode(object):
         self.ctrl = LocalizationController(
             map_folder, bw, net, descritpor_size)
 
-    def setup_map_building_mode(self):
+    def setup_map_building_mode(self, bw, net, descriptor_size):
         export_map_folder = rospy.get_param("~export_map_folder")
-        #self.ctrl = MapBuildingController(
-            #export_map_folder, bw, net, descriptor_size)
+        self.ctrl = MapBuildingController(
+            export_map_folder, bw, net, descriptor_size)
         self.is_detecting = False
-        self.map_builder_service = rospy.Service(
-            's2loc_build_map', Empty, self.build_descriptor_map)
-        self.lc_service = rospy.Service(
-            's2loc_detect', Empty, self.detect_lc)
-        self.clear_map_service = rospy.Service(
-            's2loc_clear_map', Empty, self.clear_descriptor_map)
+        self.map_builder_service = rospy.Service('s2loc_build_map', Empty, self.build_descriptor_map)
+        self.lc_service = rospy.Service('s2loc_detect', Empty, self.detect_lc)
+        self.clear_map_service = rospy.Service('s2loc_clear_map', Empty, self.clear_descriptor_map)
         print("Listening for submap messages.")
 
 
@@ -75,9 +72,10 @@ class S2LocNode(object):
         print(f'Received submap from {submap_msg.robot_name} with {len(submap_msg.nodes)} nodes.')
         self.ctrl.add_submap(submap)
 
-        msgs = self.ctrl.compute_submap_constraints()
-        for msg in msgs:
-            self.submap_pub(msg)
+        self.ctrl.publish_all_submaps()
+        #msgs = self.ctrl.compute_submap_constraints()
+        #for msg in msgs:
+            #self.submap_pub(msg)
 
     def detect_lc(self, request):
         self.is_detecting = True
