@@ -10,6 +10,7 @@ from evaluation_set import EvaluationSet
 from lc_candidate import LcCandidate
 from model import Model
 from lc_handler import LcHandler
+from submap_handler import SubmapHandler
 
 
 class MapBuildingController(BaseController):
@@ -18,6 +19,8 @@ class MapBuildingController(BaseController):
         self.descriptors = None
         self.submaps = []
         self.export_map_folder = export_map_folder
+
+        self.alignment_engine = SubmapHandler()
         self.lc_engine = LcHandler()
 
     def handle_submap(self, submap):
@@ -25,6 +28,16 @@ class MapBuildingController(BaseController):
 
     def clear_clouds(self):
         self.submaps = []
+
+    # --- SUBMAP CONSTRAINTS -------------------------------------------------
+
+    def compute_submap_constraints(self):
+        if len(self.submaps) == 0:
+            return
+        self.alignment_engine.compute_constraints(self.submaps)
+
+
+    # --- SUBMAP DESCRIPTORS --------------------------------------------------
 
     def build_descriptor_map(self):
         print("Building all descriptors...")
@@ -68,4 +81,4 @@ class MapBuildingController(BaseController):
 
 if __name__ == "__main__":
     ctrl = MapBuildingController()
-    ctrl.handle_point_cloud(1, None)
+    ctrl.handle_point_cloud(None)
