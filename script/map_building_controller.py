@@ -23,7 +23,7 @@ class MapBuildingController(BaseController):
         self.alignment_engine = SubmapHandler()
         self.lc_engine = LcHandler()
 
-    def handle_submap(self, submap):
+    def add_submap(self, submap):
         self.submaps.append(submap)
 
     def clear_clouds(self):
@@ -33,9 +33,8 @@ class MapBuildingController(BaseController):
 
     def compute_submap_constraints(self):
         if len(self.submaps) == 0:
-            return
-        self.alignment_engine.compute_constraints(self.submaps)
-
+            return None
+        return self.alignment_engine.compute_constraints(self.submaps)
 
     # --- SUBMAP DESCRIPTORS --------------------------------------------------
 

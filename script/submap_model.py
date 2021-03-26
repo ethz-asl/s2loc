@@ -2,7 +2,6 @@
 
 import rospy
 import numpy as np
-import open3d as o3d
 import sensor_msgs.point_cloud2 as pc2
 
 from maplab_msgs.msg import Submap, DenseNode
@@ -36,12 +35,17 @@ class SubmapModel(object):
         for i in range(0, n_data):
             dense_node = submap_msg.nodes[i]
 
+            # Parse pose.
             pos, orien = Utils.convert_pose_stamped_msg_to_array(dense_node.pose)
             T_G_B = Utils.convert_pos_quat_to_transformation(pos, orien)
             self.poses.append(T_G_B)
 
+            # Parse pointcloud
             cloud = Utils.convert_pointcloud2_msg_to_array(dense_node.cloud)
             self.pointclouds.append(cloud)
+
+            # Parse ts.
+            self.ts.append(dense_node.pose.header.ts)
 
     def parse_information(self, msg):
         ts = msg.header.stamp
@@ -82,13 +86,21 @@ class SubmapModel(object):
         viz.visualizeRawPointCloud(acc_points)
         return acc_points
 
-    def get_pivot_pose(self):
+    def get_pivot_pose_IMU(self):
         n_poses = len(self.poses)
         if n_poses == 0:
             return None
+        return self.poses[n_poses // 2]
 
-        pivot = n_poses // 2
-        reutrn self.poses[pivot]
+    def get_pivot_pose_LiDAR(self):
+        T_G_B = self.get_pivot_pose_IMU()
+        return np.matmul(T_G_B, self.T_B_L)
+
+    def get_pivot_timestamp_ros(self):
+        n_poses = len(self.poses)
+        if n_poses == 0:
+            return None
+        return self.ts[n_poses // 2]
 
 if __name__ == "__main__":
     rospy.init_node('foo')

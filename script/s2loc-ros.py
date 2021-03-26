@@ -10,7 +10,7 @@ import open3d as o3d
 import sensor_msgs.point_cloud2 as pc2
 
 from sensor_msgs.msg import PointCloud2, PointField
-from maplab_msgs.msg import Submap, DenseNode
+from maplab_msgs.msg import Submap, DenseNode, SubmapConstraint
 from std_srvs.srv import Empty
 
 from localization_controller import LocalizationController
@@ -20,8 +20,11 @@ from submap_model import SubmapModel
 
 class S2LocNode(object):
     def __init__(self):
+        # General settings.
         self.ctrl = None
         mode = rospy.get_param("~mode")
+
+        # Network specific settings.
         bw = rospy.get_param("~bw")
         net = rospy.get_param("~net")
         descriptor_size = rospy.get_param("~descriptor_size")
@@ -38,6 +41,8 @@ class S2LocNode(object):
         pc_topic = rospy.get_param("~pc_topic")
         self.pc_sub = rospy.Subscriber(
             pc_topic, Submap, self.submap_callback)
+        submap_topic = rospy.get_param("~submap_constraint_topic")
+        self.submap_pub = rospy.Publisher(submap_topic, SubmapConstraint, queue_size=10)
 
     def setup_localization_mode(self):
         map_folder = rospy.get_param("~map_folder")
@@ -68,7 +73,11 @@ class S2LocNode(object):
         submap.construct_data(submap_msg)
         submap.compute_dense_map()
         print(f'Received submap from {submap_msg.robot_name} with {len(submap_msg.nodes)} nodes.')
-        self.ctrl.handle_submap(submap)
+        self.ctrl.add_submap(submap)
+
+        msgs = self.ctrl.compute_submap_constraints()
+        for msg in msgs:
+            self.submap_pub(msg)
 
     def detect_lc(self, request):
         self.is_detecting = True
