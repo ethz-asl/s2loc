@@ -149,9 +149,15 @@ class SubmapHandler(object):
         T_L_a_L_b = np.matmul(T_L_G_a, T_G_L_b)
 
         # Register the submaps.
+        print(f"Prior transformation: \n{T_L_a_L_b}")
         T = self.reg_box.register(points_a, points_b, T_L_a_L_b)
-        self.reg_box.draw_registration_result(points_a, points_b, T)
-        return T
+        print(f"Computed transformation: \n{T}")
+        #self.reg_box.draw_registration_result(points_a, points_b, T)
+        #self.reg_box.draw_registration_result(points_a, points_b, T_L_a_L_b)
+        if self.reg_box.verify_registration_result(T, T_L_a_L_b):
+            return T
+        else:
+            return T_L_a_L_b
 
     def create_submap_constraint_msg(self, candidate_a, candidate_b, T_L_a_L_b):
         msg = SubmapConstraint()
