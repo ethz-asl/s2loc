@@ -62,7 +62,7 @@ class SubmapHandler(object):
         candidates = self.find_close_submaps(submaps)
         if np.count_nonzero(candidates) == 0:
             rospy.logerr("Unable to find any close submaps.")
-            return;
+            return
         return self.evaluate_candidates(submaps, candidates)
 
     def find_close_submaps(self, submaps):
@@ -74,8 +74,10 @@ class SubmapHandler(object):
         tree = spatial.KDTree(submap_positions)
 
         candidates = np.zeros((n_submaps, n_submaps))
+        print(f"number of submaps {n_submaps}, candidates {candidates.shape}")
+        print(f"submap positions {submap_positions}")
         for i in range(0, n_submaps):
-            nn_dists, nn_indices = self.lookup_closest_submap(submap_positions[i, :])
+            nn_dists, nn_indices = self.lookup_closest_submap(submap_positions, tree, i)
             if not nn_indices or not nn_dists:
                 continue
 
@@ -85,16 +87,19 @@ class SubmapHandler(object):
         # filter duplicates by zeroing the lower triangle
         return np.triu(candidates)
 
-    def lookup_closest_submap(self, submap):
+    def lookup_closest_submap(self, submaps, tree, idx):
+        current_submap = submaps[idx, :]
+        n_neighbors = min(len(submaps), self.n_nearest_neighbors)
         nn_dists, nn_indices = tree.query(
-            submap,
+            current_submap,
             p=self.p_norm,
-            k=self.n_nearest_neighbors,
+            k=n_neighbors,
             distance_upper_bound=self.pivot_distance)
-        nn_dists, nn_indices = Utils.fix_nn_output(
-            idx, nn_dists, nn_indices)
-        nn_indices = [
-            nn_indices] if self.n_nearest_neighbors == 1 else nn_indices
+
+        # Remove self and fix output.
+        nn_dists, nn_indices = Utils.fix_nn_output(n_neighbors, idx, nn_dists, nn_indices)
+
+        print(f"nn_indices = {nn_indices}, nn_dists = {nn_dists}")
 
         return nn_dists, nn_indices
 
@@ -113,8 +118,8 @@ class SubmapHandler(object):
             return
         all_constraints = []
         for i in range(0, n_submaps):
-            submap_msgs = self.evaluate_neighbors(submaps, candidates, i)
-            all_constraints.extend(sub_msgs)
+            submap_msgs = self.evaluate_neighbors_for(submaps, candidates, i)
+            all_constraints.extend(submap_msgs)
         return all_constraints
 
     def evaluate_neighbors_for(self, submaps, candidates, i):
@@ -127,25 +132,26 @@ class SubmapHandler(object):
         submap_msgs = []
         for j in range(0, len(neighbors)):
             if neighbors[j] > 0:
-                candidate_a = submaps[j]
+                candidate_b = submaps[j]
                 T_L_a_L_b = self.compute_alignment(candidate_a, candidate_b)
                 msg = self.create_submap_constraint_msg(candidate_a, candidate_b, T_L_a_L_b)
                 submap_msgs.append(msg)
         return submap_msgs
 
     def compute_alignment(self, candidate_a, candidate_b):
-        if len(submaps) == 0:
-            return
-        point_a = candidate_a.compute_dense_map()
-        point_b = candidate_b.compute_dense_map()
+        rospy.loginfo("[SubmapHandler] Computing alignment")
+        points_a = candidate_a.compute_dense_map()
+        points_b = candidate_b.compute_dense_map()
 
         # Compute prior transformation.
-        T_L_G_a = np.linalg.inv(T_candidate_a.get_pivot_pose_LiDAR())
-        T_G_L_b = T_candidate_b.get_pivot_pose_LiDAR()
+        T_L_G_a = np.linalg.inv(candidate_a.get_pivot_pose_LiDAR())
+        T_G_L_b = candidate_b.get_pivot_pose_LiDAR()
         T_L_a_L_b = np.matmul(T_L_G_a, T_G_L_b)
 
         # Register the submaps.
-        return self.reg_box.register(points_a, points_b, T_L_a_L_b)
+        T = self.reg_box.register(points_a, points_b, T_L_a_L_b)
+        self.reg_box.draw_registration_result(points_a, points_b, T)
+        return T
 
     def create_submap_constraint_msg(self, candidate_a, candidate_b, T_L_a_L_b):
         msg = SubmapConstraint()

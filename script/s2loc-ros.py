@@ -73,7 +73,7 @@ class S2LocNode(object):
         self.ctrl.add_submap(submap)
 
         self.ctrl.publish_all_submaps()
-        #msgs = self.ctrl.compute_submap_constraints()
+        msgs = self.ctrl.compute_submap_constraints()
         #for msg in msgs:
             #self.submap_pub(msg)
 

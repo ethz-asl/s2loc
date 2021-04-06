@@ -1,5 +1,6 @@
 #! /usr/bin/env python3
 
+import math
 import numpy as np
 import open3d as o3d
 import sensor_msgs.point_cloud2 as pc2
@@ -43,10 +44,18 @@ class Utils(object):
         return np.column_stack((dst, cloud[:, 3]))
 
     @staticmethod
-    def fix_nn_output(self, idx, nn_dists, nn_indices):
+    def fix_nn_output(n_neighbors, idx, nn_dists, nn_indices):
+        '''
         self_idx = nn_indices.index(idx)
         del nn_indices[self_idx]
         del nn_dists[self_idx]
+        '''
+        self_idx = np.where(nn_indices == idx)[0][0]
+        nn_dists = np.delete(nn_dists, [self_idx])
+        nn_indices = np.delete(nn_indices, [self_idx])
+
+        nn_indices = [nn_indices] if n_neighbors == 1 else nn_indices
+        nn_dists = [nn_dists] if n_neighbors == 1 else nn_dists
 
         fixed_nn_dists = [dists for dists in nn_dists if not (
             math.isnan(dists) or math.isinf(dists))]
