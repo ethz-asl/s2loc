@@ -28,7 +28,7 @@ FIELDS_XYZI = [
 
 class SubmapHandler(object):
     def __init__(self):
-        self.pivot_distance = 5
+        self.pivot_distance = 15
         self.n_nearest_neighbors = 3
         self.p_norm = 2
         self.reg_box = RegBox()
@@ -67,13 +67,13 @@ class SubmapHandler(object):
 
     def find_close_submaps(self, submaps):
         n_submaps = len(submaps)
-        if n_submaps == 0:
-            rospy.logerr("Empty submap array given.")
-            return
+        candidates = np.zeros((n_submaps, n_submaps))
+        if n_submaps <= 1:
+            rospy.logerr("Not enough submaps to find candidates.")
+            return candidates
         submap_positions = self.get_all_positions(submaps)
         tree = spatial.KDTree(submap_positions)
 
-        candidates = np.zeros((n_submaps, n_submaps))
         print(f"number of submaps {n_submaps}, candidates {candidates.shape}")
         print(f"submap positions {submap_positions}")
         for i in range(0, n_submaps):
