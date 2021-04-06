@@ -13,12 +13,17 @@ from lc_candidate import LcCandidate
 from model import Model
 from reg_box import RegBox
 from utils import Utils
+from visualize import Visualize
 
 from maplab_msgs.msg import SubmapConstraint
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
 
-# The data structure of each point in ros PointCloud2: 16 bits = x + y + z + rgb
+FIELDS_XYZ = [
+    PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+    PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+    PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+]
 FIELDS_XYZI = [
     PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
     PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
@@ -36,6 +41,8 @@ class SubmapHandler(object):
         #submap_topic = rospy.get_param("~submap_constraint_topic")
         map_topic = '/s2loc/map'
         self.map_pub = rospy.Publisher(map_topic, PointCloud2, queue_size=10)
+        self.visualizer = Visualize()
+        self.submap_seq = 0
 
     def publish_submaps(self, submaps):
         n_submaps = len(submaps)
@@ -51,10 +58,11 @@ class SubmapHandler(object):
             submap_points = Utils.transform_pointcloud(submap, T_G_L)
             map_points = np.append(map_points, submap_points, axis=0)
 
+        map_points = Utils.downsample_pointcloud(map_points)
         n_points = map_points.shape[0]
         if n_points > 1:
             map_points = map_points[1:,:]
-            map_pointcloud_ros = pc2.create_cloud(header, FIELDS_XYZI, map_points)
+            map_pointcloud_ros = pc2.create_cloud(header, FIELDS_XYZ, map_points)
             self.map_pub.publish(map_pointcloud_ros)
             rospy.loginfo(f"Published map with {n_points} points.")
 
@@ -121,14 +129,19 @@ class SubmapHandler(object):
         neighbors = candidates[i,:]
         nnz = np.count_nonzero(neighbors)
         if nnz == 0:
-            rospy.logerr(f"Found no neighbors for submap {i}")
+            return []
 
         candidate_a = submaps[i]
         submap_msgs = []
         for j in range(0, len(neighbors)):
             if neighbors[j] > 0:
                 candidate_b = submaps[j]
+
+                # Compute the alignment between the two submaps.
                 T_L_a_L_b = self.compute_alignment(candidate_a, candidate_b)
+                self.visualizer.visualizeCandidates(candidate_a, candidate_b, T_L_a_L_b)
+
+                # Create a submap constraint message
                 msg = self.create_submap_constraint_msg(candidate_a, candidate_b, T_L_a_L_b)
                 submap_msgs.append(msg)
         return submap_msgs
@@ -161,6 +174,9 @@ class SubmapHandler(object):
 
         msg.T_a_b = T_L_a_L_b
         msg.header.stamp = rospy.get_rostime()
+        msg.header.seq = self.submap_seq
+        self.submap_seq += 1
+
         return msg
 
 if __name__ == "__main__":

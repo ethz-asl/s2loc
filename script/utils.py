@@ -44,6 +44,16 @@ class Utils(object):
         return np.column_stack((dst, cloud[:, 3]))
 
     @staticmethod
+    def downsample_pointcloud(cloud, voxel_size=0.15):
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(cloud[:, 0:3])
+        pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+
+        dst = np.asarray(pcd.points)
+        # TODO(lbern): fix for intensity
+        return dst
+
+    @staticmethod
     def fix_nn_output(n_neighbors, idx, nn_dists, nn_indices):
         self_idx = np.where(nn_indices == idx)[0][0]
         nn_dists = np.delete(nn_dists, [self_idx])
