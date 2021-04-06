@@ -45,11 +45,6 @@ class Utils(object):
 
     @staticmethod
     def fix_nn_output(n_neighbors, idx, nn_dists, nn_indices):
-        '''
-        self_idx = nn_indices.index(idx)
-        del nn_indices[self_idx]
-        del nn_dists[self_idx]
-        '''
         self_idx = np.where(nn_indices == idx)[0][0]
         nn_dists = np.delete(nn_dists, [self_idx])
         nn_indices = np.delete(nn_indices, [self_idx])
@@ -57,8 +52,12 @@ class Utils(object):
         nn_indices = [nn_indices] if n_neighbors == 1 else nn_indices
         nn_dists = [nn_dists] if n_neighbors == 1 else nn_dists
 
-        fixed_nn_dists = [dists for dists in nn_dists if not (
-            math.isnan(dists) or math.isinf(dists))]
-        fixed_nn_indices = [i for i in nn_indices if not (
-            math.isnan(i) or math.isinf(i))]
-        return fixed_nn_dists, fixed_nn_indices
+        mask = np.isnan(nn_indices.astype(float))
+        mask = mask | np.isnan(nn_dists.astype(float))
+        mask = mask | np.isinf(nn_indices.astype(float))
+        mask = mask | np.isinf(nn_dists.astype(float))
+        print(f"mask is {mask}")
+        mask = np.logical_not(mask)
+        print(f"not mask is {mask}")
+        print(f"mask2 is {np.isinf(nn_dists.astype(float))}")
+        return nn_dists[mask], nn_indices[mask]

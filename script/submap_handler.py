@@ -78,9 +78,8 @@ class SubmapHandler(object):
         print(f"submap positions {submap_positions}")
         for i in range(0, n_submaps):
             nn_dists, nn_indices = self.lookup_closest_submap(submap_positions, tree, i)
-            if not nn_indices or not nn_dists:
+            if len(nn_indices) == 0 or len(nn_dists) == 0:
                 continue
-
             for nn_i in nn_indices:
                 candidates[i, nn_i] = 1
 
@@ -98,7 +97,6 @@ class SubmapHandler(object):
 
         # Remove self and fix output.
         nn_dists, nn_indices = Utils.fix_nn_output(n_neighbors, idx, nn_dists, nn_indices)
-
         print(f"nn_indices = {nn_indices}, nn_dists = {nn_dists}")
 
         return nn_dists, nn_indices
