@@ -24,7 +24,7 @@ class Visualize:
         self.line_marker.action = Marker().ADD
         self.line_marker.type = Marker().LINE_STRIP
         self.line_marker.lifetime = rospy.Duration(0.0)
-        self.line_marker.scale.x = 0.15
+        self.line_marker.scale.x = 0.05
         self.line_marker.id = 0
 
         self.submap_constraints = MarkerArray()

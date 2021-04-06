@@ -3,8 +3,10 @@ import os
 
 import rospy
 import sensor_msgs.point_cloud2 as pc2
+from geometry_msgs.msg import Pose, PoseWithCovariance
 import numpy as np
 from scipy import spatial
+from scipy.spatial.transform import Rotation
 
 import torch
 from base_controller import BaseController
@@ -33,8 +35,8 @@ FIELDS_XYZI = [
 
 class SubmapHandler(object):
     def __init__(self):
-        self.pivot_distance = 15
-        self.n_nearest_neighbors = 3
+        self.pivot_distance = 20
+        self.n_nearest_neighbors = 20
         self.p_norm = 2
         self.reg_box = RegBox()
 
@@ -68,6 +70,7 @@ class SubmapHandler(object):
 
     def compute_constraints(self, submaps):
         candidates = self.find_close_submaps(submaps)
+        print(f"Candidates adj matrix is \n {candidates}")
         if np.count_nonzero(candidates) == 0:
             rospy.logerr("Unable to find any close submaps.")
             return
@@ -81,6 +84,7 @@ class SubmapHandler(object):
             return candidates
         submap_positions = self.get_all_positions(submaps)
         tree = spatial.KDTree(submap_positions)
+        print(f"submap positions: \n {submap_positions}")
 
         for i in range(0, n_submaps):
             nn_dists, nn_indices = self.lookup_closest_submap(submap_positions, tree, i)
@@ -121,19 +125,22 @@ class SubmapHandler(object):
             return
         all_constraints = []
         for i in range(0, n_submaps):
-            submap_msgs = self.evaluate_neighbors_for(submaps, candidates, i)
-            all_constraints.extend(submap_msgs)
+            submap_msg = self.evaluate_neighbors_for(submaps, candidates, i)
+            if submap_msg is not None:
+                all_constraints.append(submap_msg)
+        rospy.loginfo(f'Computed {len(all_constraints)} constraints between submaps.')
         return all_constraints
 
     def evaluate_neighbors_for(self, submaps, candidates, i):
         neighbors = candidates[i,:]
         nnz = np.count_nonzero(neighbors)
         if nnz == 0:
-            return []
+            return None
 
         candidate_a = submaps[i]
-        submap_msgs = []
-        for j in range(0, len(neighbors)):
+        submap_msg = SubmapConstraint()
+        n_neighbors = len(neighbors)
+        for j in range(0, n_neighbors):
             if neighbors[j] > 0:
                 candidate_b = submaps[j]
 
@@ -142,9 +149,14 @@ class SubmapHandler(object):
                 self.visualizer.visualizeCandidates(candidate_a, candidate_b, T_L_a_L_b)
 
                 # Create a submap constraint message
-                msg = self.create_submap_constraint_msg(candidate_a, candidate_b, T_L_a_L_b)
-                submap_msgs.append(msg)
-        return submap_msgs
+                submap_msg = self.create_and_append_submap_constraint_msg(
+                                candidate_a, candidate_b, T_L_a_L_b, submap_msg)
+                self.verify_submap_message(submap_msg)
+
+        submap_msg.header.stamp = rospy.get_rostime()
+        submap_msg.header.seq = self.submap_seq
+        self.submap_seq += 1
+        return submap_msg
 
     def compute_alignment(self, candidate_a, candidate_b):
         points_a = candidate_a.compute_dense_map()
@@ -164,20 +176,44 @@ class SubmapHandler(object):
         else:
             return T_L_a_L_b
 
-    def create_submap_constraint_msg(self, candidate_a, candidate_b, T_L_a_L_b):
-        msg = SubmapConstraint()
-        msg.id_from = candidate_a.id
-        msg.timestamp_from = candidate_a.get_pivot_timestamp_ros()
+    def create_and_append_submap_constraint_msg(self, candidate_a, candidate_b, T_L_a_L_b, submap_msg):
+        submap_msg.id_from.append(candidate_a.id)
+        submap_msg.timestamp_from.append(candidate_a.get_pivot_timestamp_ros())
 
-        msg.id_to = candidate_b.id
-        msg.timestamp_to = candidate_b.get_pivot_timestamp_ros()
+        submap_msg.id_to.append(candidate_b.id)
+        submap_msg.timestamp_to.append(candidate_b.get_pivot_timestamp_ros())
 
-        msg.T_a_b = T_L_a_L_b
-        msg.header.stamp = rospy.get_rostime()
-        msg.header.seq = self.submap_seq
-        self.submap_seq += 1
+        t = T_L_a_L_b[0:3,3]
+        q = Rotation.from_matrix(T_L_a_L_b[0:3,0:3]).as_quat() # x, y, z, w
 
-        return msg
+        pose_cov_msg = PoseWithCovariance()
+        pose_msg = Pose()
+        pose_msg.position.x = t[0]
+        pose_msg.position.y = t[1]
+        pose_msg.position.z = t[2]
+        pose_msg.orientation.x = q[0]
+        pose_msg.orientation.y = q[1]
+        pose_msg.orientation.z = q[2]
+        pose_msg.orientation.w = q[3]
+
+        pose_cov_msg.pose = pose_msg
+        submap_msg.T_a_b.append(pose_cov_msg)
+
+        return submap_msg
+
+    def verify_submap_message(self, submap_msg):
+        n_id_from = len(submap_msg.id_from)
+        n_id_to = len(submap_msg.id_to)
+
+        n_ts_from = len(submap_msg.timestamp_from)
+        n_ts_to = len(submap_msg.timestamp_to)
+
+        n_poses = len(submap_msg.T_a_b)
+
+        assert(n_id_from == n_id_to)
+        assert(n_id_from == n_ts_from)
+        assert(n_id_from == n_ts_to)
+        assert(n_id_from == n_poses)
 
 if __name__ == "__main__":
     submap_handler = SubmapHandler()
