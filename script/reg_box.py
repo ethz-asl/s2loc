@@ -71,8 +71,6 @@ class RegBox(object):
         R_diff = np.trace(np.linalg.inv(R_reg) - R_prior)
         if R_diff > self.R_verification_threshold:
             is_valid = False
-
-        print(f"t_diff = {t_diff} and R_diff = {R_diff}")
         return is_valid
 
 

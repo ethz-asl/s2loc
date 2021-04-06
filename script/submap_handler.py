@@ -74,8 +74,6 @@ class SubmapHandler(object):
         submap_positions = self.get_all_positions(submaps)
         tree = spatial.KDTree(submap_positions)
 
-        print(f"number of submaps {n_submaps}, candidates {candidates.shape}")
-        print(f"submap positions {submap_positions}")
         for i in range(0, n_submaps):
             nn_dists, nn_indices = self.lookup_closest_submap(submap_positions, tree, i)
             if len(nn_indices) == 0 or len(nn_dists) == 0:
@@ -97,7 +95,6 @@ class SubmapHandler(object):
 
         # Remove self and fix output.
         nn_dists, nn_indices = Utils.fix_nn_output(n_neighbors, idx, nn_dists, nn_indices)
-        print(f"nn_indices = {nn_indices}, nn_dists = {nn_dists}")
 
         return nn_dists, nn_indices
 
@@ -137,7 +134,6 @@ class SubmapHandler(object):
         return submap_msgs
 
     def compute_alignment(self, candidate_a, candidate_b):
-        rospy.loginfo("[SubmapHandler] Computing alignment")
         points_a = candidate_a.compute_dense_map()
         points_b = candidate_b.compute_dense_map()
 
@@ -147,9 +143,7 @@ class SubmapHandler(object):
         T_L_a_L_b = np.matmul(T_L_G_a, T_G_L_b)
 
         # Register the submaps.
-        print(f"Prior transformation: \n{T_L_a_L_b}")
         T = self.reg_box.register(points_a, points_b, T_L_a_L_b)
-        print(f"Computed transformation: \n{T}")
         #self.reg_box.draw_registration_result(points_a, points_b, T)
         #self.reg_box.draw_registration_result(points_a, points_b, T_L_a_L_b)
         if self.reg_box.verify_registration_result(T, T_L_a_L_b):

@@ -56,8 +56,5 @@ class Utils(object):
         mask = mask | np.isnan(nn_dists.astype(float))
         mask = mask | np.isinf(nn_indices.astype(float))
         mask = mask | np.isinf(nn_dists.astype(float))
-        print(f"mask is {mask}")
         mask = np.logical_not(mask)
-        print(f"not mask is {mask}")
-        print(f"mask2 is {np.isinf(nn_dists.astype(float))}")
         return nn_dists[mask], nn_indices[mask]
