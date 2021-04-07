@@ -1,10 +1,10 @@
 #! /usr/bin/env python3
 
 import rospy
-
+import copy
 import argparse
 import sys
-
+from multiprocessing import Lock
 import numpy as np
 import open3d as o3d
 import sensor_msgs.point_cloud2 as pc2
@@ -23,6 +23,7 @@ class S2LocNode(object):
         # General settings.
         self.ctrl = None
         mode = rospy.get_param("~mode")
+        self.rate = rospy.Rate(0.1)
 
         # Network specific settings.
         bw = rospy.get_param("~bw")
@@ -43,6 +44,8 @@ class S2LocNode(object):
             pc_topic, Submap, self.submap_callback)
         submap_topic = rospy.get_param("~submap_constraint_topic")
         self.submap_pub = rospy.Publisher(submap_topic, SubmapConstraint, queue_size=10)
+
+        self.mutex = Lock()
 
     def setup_localization_mode(self):
         map_folder = rospy.get_param("~map_folder")
@@ -69,11 +72,19 @@ class S2LocNode(object):
         submap = SubmapModel()
         submap.construct_data(submap_msg)
         submap.compute_dense_map()
-        print(f'Received submap from {submap_msg.robot_name} with {len(submap_msg.nodes)} nodes.')
+        print(f'Received submap from {submap_msg.robot_name} with {len(submap_msg.nodes)} nodes and id {submap_msg.id}.')
+        self.mutex.acquire()
         self.ctrl.add_submap(submap)
+        self.mutex.release()
 
-        self.ctrl.publish_all_submaps()
-        msgs = self.ctrl.compute_submap_constraints()
+
+    def update(self):
+        rospy.loginfo("Checking for updates.")
+        self.mutex.acquire()
+        submaps = copy.deepcopy(self.ctrl.get_submaps())
+        self.mutex.release()
+        self.ctrl.publish_all_submaps(submaps)
+        msgs = self.ctrl.compute_submap_constraints(submaps)
         if msgs is not None:
             for msg in msgs:
                 self.submap_pub.publish(msg)
@@ -93,8 +104,8 @@ class S2LocNode(object):
 if __name__ == "__main__":
     rospy.init_node('S2LocNode')
     print("=== Running S2Loc Node ====================")
-    try:
-        s2loc = S2LocNode()
-        rospy.spin()
-    except rospy.ROSInterruptException:
-        pass
+
+    node = S2LocNode()
+    while not rospy.is_shutdown():
+        node.update()
+        node.rate.sleep()

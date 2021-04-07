@@ -18,6 +18,7 @@ class Visualize:
 
         # Line Marker
         self.pub_line_marker = rospy.Publisher("/s2loc/submap_constraint", MarkerArray, queue_size=10)
+        self.submap_constraints = None
         self.line_marker = Marker()
         self.line_marker.header.frame_id = "map"
         self.line_marker.ns = "Line" # unique ID
@@ -25,9 +26,13 @@ class Visualize:
         self.line_marker.type = Marker().LINE_STRIP
         self.line_marker.lifetime = rospy.Duration(0.0)
         self.line_marker.scale.x = 0.05
-        self.line_marker.id = 0
+        self.resetConstraintVisualization()
 
+
+    def resetConstraintVisualization(self):
+        self.line_marker.id = 0
         self.submap_constraints = MarkerArray()
+
 
     def visualizeRawPointCloudFromSphere(self, sphere, jupyter = False):
         pcd = o3d.geometry.PointCloud()

@@ -17,27 +17,33 @@ class MapBuildingController(BaseController):
     def __init__(self, export_map_folder="", bw=100, state_dict='./net_params_new_1.pkl', desc_size=128):
         super().__init__(bw, state_dict, desc_size)
         self.descriptors = None
-        self.submaps = []
+        self.submaps = {}
         self.export_map_folder = export_map_folder
 
         self.alignment_engine = SubmapHandler()
         self.lc_engine = LcHandler()
 
     def add_submap(self, submap):
-        self.submaps.append(submap)
+        id = submap.id
+        self.submaps[id] = submap
 
     def clear_clouds(self):
-        self.submaps = []
+        self.submaps = {}
+
+    def get_submaps(self):
+        return list(self.submaps.values())
 
     # --- SUBMAP CONSTRAINTS -------------------------------------------------
 
-    def compute_submap_constraints(self):
-        if len(self.submaps) == 0:
+    def compute_submap_constraints(self, submaps):
+        n_submaps = len(submaps)
+        print(f"Computing constraints for {n_submaps} submaps.")
+        if n_submaps == 0:
             return None
-        return self.alignment_engine.compute_constraints(self.submaps)
+        return self.alignment_engine.compute_constraints(submaps)
 
-    def publish_all_submaps(self):
-        self.alignment_engine.publish_submaps(self.submaps)
+    def publish_all_submaps(self, submaps):
+        self.alignment_engine.publish_submaps(submaps)
 
     # --- SUBMAP DESCRIPTORS --------------------------------------------------
 

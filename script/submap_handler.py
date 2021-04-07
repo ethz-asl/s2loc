@@ -70,7 +70,6 @@ class SubmapHandler(object):
 
     def compute_constraints(self, submaps):
         candidates = self.find_close_submaps(submaps)
-        print(f"Candidates adj matrix is \n {candidates}")
         if np.count_nonzero(candidates) == 0:
             rospy.logerr("Unable to find any close submaps.")
             return
@@ -84,7 +83,6 @@ class SubmapHandler(object):
             return candidates
         submap_positions = self.get_all_positions(submaps)
         tree = spatial.KDTree(submap_positions)
-        print(f"submap positions: \n {submap_positions}")
 
         for i in range(0, n_submaps):
             nn_dists, nn_indices = self.lookup_closest_submap(submap_positions, tree, i)
@@ -124,11 +122,11 @@ class SubmapHandler(object):
         if n_submaps == 0 or len(candidates) == 0:
             return
         all_constraints = []
+        self.visualizer.resetConstraintVisualization()
         for i in range(0, n_submaps):
             submap_msg = self.evaluate_neighbors_for(submaps, candidates, i)
             if submap_msg is not None:
                 all_constraints.append(submap_msg)
-        rospy.loginfo(f'Computed {len(all_constraints)} constraints between submaps.')
         return all_constraints
 
     def evaluate_neighbors_for(self, submaps, candidates, i):
@@ -166,6 +164,7 @@ class SubmapHandler(object):
         T_L_G_a = np.linalg.inv(candidate_a.get_pivot_pose_LiDAR())
         T_G_L_b = candidate_b.get_pivot_pose_LiDAR()
         T_L_a_L_b = np.matmul(T_L_G_a, T_G_L_b)
+        return T_L_a_L_b
 
         # Register the submaps.
         T = self.reg_box.register(points_a, points_b, T_L_a_L_b)
@@ -179,9 +178,11 @@ class SubmapHandler(object):
     def create_and_append_submap_constraint_msg(self, candidate_a, candidate_b, T_L_a_L_b, submap_msg):
         submap_msg.id_from.append(candidate_a.id)
         submap_msg.timestamp_from.append(candidate_a.get_pivot_timestamp_ros())
+        submap_msg.robot_name_from = candidate_a.robot_name
 
         submap_msg.id_to.append(candidate_b.id)
         submap_msg.timestamp_to.append(candidate_b.get_pivot_timestamp_ros())
+        submap_msg.robot_name_to = candidate_b.robot_name
 
         t = T_L_a_L_b[0:3,3]
         q = Rotation.from_matrix(T_L_a_L_b[0:3,0:3]).as_quat() # x, y, z, w
