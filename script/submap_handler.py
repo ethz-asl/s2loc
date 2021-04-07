@@ -209,6 +209,9 @@ class SubmapHandler(object):
         n_ts_from = len(submap_msg.timestamp_from)
         n_ts_to = len(submap_msg.timestamp_to)
 
+        n_robot_name_to = len(submap_msg.robot_name_to)
+        n_robot_name_from = len(submap_msg.robot_name_from)
+
         n_poses = len(submap_msg.T_a_b)
 
         assert(n_id_from == n_id_to)
