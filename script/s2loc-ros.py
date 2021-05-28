@@ -11,6 +11,7 @@ import sensor_msgs.point_cloud2 as pc2
 
 from sensor_msgs.msg import PointCloud2, PointField
 from maplab_msgs.msg import Submap, DenseNode, SubmapConstraint
+from maplab_msgs.srv import PlaceLookup
 from std_srvs.srv import Empty
 
 from localization_controller import LocalizationController
@@ -39,9 +40,15 @@ class S2LocNode(object):
             print("ERROR: no valid mode specified: ", mode)
             sys.exit(-1)
 
+        # Input pointclouds
         pc_topic = rospy.get_param("~pc_topic")
-        self.pc_sub = rospy.Subscriber(
-            pc_topic, Submap, self.submap_callback)
+        self.pc_sub = rospy.Subscriber(pc_topic, Submap, self.submap_callback)
+
+        # Input place lookup requests
+        place_lookup_topic = rospy.get_param("~place_lookup_topic")
+        self.place_lookup = rospy.Service(place_lookup_topic, PlaceLookup, place_lookup_request)
+
+        # Submap constraint output
         submap_topic = rospy.get_param("~submap_constraint_topic")
         self.submap_pub = rospy.Publisher(submap_topic, SubmapConstraint, queue_size=10)
 
@@ -77,6 +84,8 @@ class S2LocNode(object):
         self.ctrl.add_submap(submap)
         self.mutex.release()
 
+    def place_lookup_request(self, place_lookup_req):
+        rospy.loginfo(f"[S2Loc-Ros] Received a place lookup request with {place_lookup_req.n_neighbors} neighbors and threshold of {place_lookup_req.confidence_threshold}.")
 
     def update(self):
         rospy.loginfo("Checking for updates.")

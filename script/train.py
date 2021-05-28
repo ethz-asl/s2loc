@@ -1,13 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # S2Loc Training
-#
-# Description: We propose to lear a descriptor of point clouds for global localization.
-#
-# Author: Lukas Bernreiter (lukas.bernreiter@ieee.org)
-#
-
 import math
 import sys
 import time
@@ -39,12 +29,9 @@ from training_set import TrainingSet
 from visualize import Visualize
 
 # ## Load All Data
-#
 # Load the dataset, project each point cloud on a sphere and derive a function for it.
 
-
 # ## Initialize the model and the training set
-
 torch.cuda.set_device(0)
 torch.backends.cudnn.benchmark = True
 bandwidth = 100
@@ -60,7 +47,7 @@ descriptor_size = 256
 net_input_size = 2 * bandwidth
 criterion = ImprovedTripletLoss(margin=2, alpha=0.5, margin2=0.2)
 writer = SummaryWriter()
-model_save = 'net_params_phaser.pkl'
+model_save = 'net_params.pkl'
 feature_dim = bandwidth * 2
 #summary(net, input_size=[(n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim), (n_features, feature_dim, feature_dim)])
 
@@ -68,10 +55,7 @@ feature_dim = bandwidth * 2
 n_data = 20000
 #n_data = 22
 cache = n_data
-#dataset_path = "/mnt/data/datasets/Spherical/training"
-#dataset_path = "/media/scratch/berlukas/spherical/"
-dataset_path = "/home/berlukas/data/arche_low_res2/"
-#dataset_path = "/media/scratch/berlukas/spherical/arche_high_res2/"
+dataset_path = "../../data/arche_low_res/"
 db_parser = DatabaseParser(dataset_path)
 
 training_missions, test_missions = MissionIndices.get_arche_low_res()
@@ -89,11 +73,11 @@ if generate_features:
     anchor_poses = ds.anchor_poses
     positive_poses = ds.positive_poses
     negative_poses = ds.negative_poses
-    train_set.exportGeneratedFeatures('/home/berlukas/data/spherical/arche_low_res_big/')
+    train_set.exportGeneratedFeatures('../../data/spherical/arche_low_res/')
 else:
-    anchor_poses,positive_poses,negative_poses = train_set.loadFeatures('/home/berlukas/data/spherical/arche_low_res_big/')
+    anchor_poses,positive_poses,negative_poses = train_set.loadFeatures('../../data/spherical/arche_low_res/')
 
-# hack for removing the images
+# tmp for removing the images
 #train_set.anchor_features = train_set.anchor_features[:,0:2,:,:]
 #train_set.positive_features = train_set.positive_features[:,0:2,:,:]
 #train_set.negative_features = train_set.negative_features[:,0:2,:,:]
@@ -125,8 +109,6 @@ if visualize:
     viz.visualizeSphere(first_anchor, True)
 
 # ## Train model
-
-
 def adjust_learning_rate_exp(optimizer, epoch_num, lr):
     decay_rate = 0.96
     new_lr = lr * math.pow(decay_rate, epoch_num)
@@ -138,7 +120,6 @@ def adjust_learning_rate_exp(optimizer, epoch_num, lr):
 
 val_accs = AverageMeter()
 loss_ = 0
-
 
 def accuracy(dista, distb):
     margin = 0
@@ -152,16 +133,10 @@ def train(net, criterion, optimizer, writer, epoch, n_iter, loss_, t0):
     train_neg_dist = AverageMeter()
     net.train()
     for batch_idx, (data1, data2, data3) in enumerate(train_loader):
-        data1, data2, data3 = data1.cuda().float(
-        ), data2.cuda().float(), data3.cuda().float()
-        if np.count_nonzero(data1.cpu().data) == 0:
-            print('DATA IS ZERO AGAIN')
-
-        
+        data1, data2, data3 = data1.cuda().float(), data2.cuda().float(), data3.cuda().float()
         embedded_a, embedded_p, embedded_n = net(data1, data2, data3)
 
-        dista, distb, loss_triplet, loss_total = criterion(
-            embedded_a, embedded_p, embedded_n)
+        dista, distb, loss_triplet, loss_total = criterion(embedded_a, embedded_p, embedded_n)
         loss_embedd = embedded_a.norm(2) + embedded_p.norm(2) + embedded_n.norm(2)
         loss = loss_triplet + 0.001 * loss_embedd
 
@@ -214,42 +189,7 @@ def validate(net, criterion, optimizer, writer, epoch, n_iter):
             writer.add_scalar('Validation/Loss', loss, n_iter)
             writer.add_scalar('Validation/Accuracy', val_accs.avg, n_iter)
 
-            '''
-            anchor_embeddings = np.append(
-                anchor_embeddings, embedded_a.cpu().data.numpy().reshape([1, -1]))
-            positive_embeddings = np.append(
-                positive_embeddings, embedded_p.cpu().data.numpy().reshape([1, -1]))
-            '''
             n_iter += 1
-        '''
-        desc_anchors = anchor_embeddings[1:].reshape([val_size, descriptor_size])
-        desc_positives = positive_embeddings[1:].reshape([val_size, descriptor_size])
-        sys.setrecursionlimit(50000)
-        tree = spatial.KDTree(desc_positives)
-        p_norm = 2
-        max_pos_dist = 5.0
-        max_anchor_dist = 1
-        assert len(anchor_poses) == len(positive_poses)
-
-        n_nearest_neighbors = 5
-        loc_count = 0
-        for idx in range(val_size):
-            nn_dists, nn_indices = tree.query(
-                desc_anchors[idx, :], p=p_norm, k=n_nearest_neighbors)
-            nn_indices = [nn_indices] if n_nearest_neighbors == 1 else nn_indices
-
-            for nn_i in nn_indices:
-                if (nn_i >= val_size):
-                    break
-                dist = spatial.distance.euclidean(
-                    positive_poses[nn_i, 5:8], anchor_poses[idx, 5:8])
-                if (dist <= max_pos_dist):
-                    loc_count = loc_count + 1
-                    break
-
-        loc_precision = (loc_count * 1.0) / val_size
-        writer.add_scalar('Validation/Precision/Location', loc_precision, epoch)
-        '''
 
     return n_iter
 
@@ -336,7 +276,6 @@ def test(net, criterion, writer):
             writer.add_scalar('Test/Precision/Localization',
                               loc_precision, n_nearest_neighbors)
 
-abort = False
 if not restore:
     train_iter = 0
     val_iter = 0
@@ -347,13 +286,7 @@ if not restore:
         t0 = time.time()
 
         train_iter = train(net, criterion, optimizer, writer, epoch, train_iter, loss_, t0)
-        if (np.isnan(loss_) or train_iter == -1):
-            print('Loss is nan. Aborting')
-            abort = True
-            break
-
         val_iter = validate(net, criterion, optimizer, writer, epoch, val_iter)
-
         writer.add_scalar('Train/lr', lr, epoch)
 
     print("Training finished!")
@@ -363,9 +296,8 @@ else:
 
 # Test
 
-if abort == False:
-    print("Starting testing...")
-    torch.cuda.empty_cache()
-    test(net, criterion, writer)
-    print("Testing finished!")
-    writer.close()
+print("Starting testing...")
+torch.cuda.empty_cache()
+test(net, criterion, writer)
+print("Testing finished!")
+writer.close()
