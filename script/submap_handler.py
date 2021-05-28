@@ -35,8 +35,8 @@ FIELDS_XYZI = [
 
 class SubmapHandler(object):
     def __init__(self):
-        self.pivot_distance = 20
-        self.n_nearest_neighbors = 20
+        self.pivot_distance = 8
+        self.n_nearest_neighbors = 50
         self.p_norm = 2
         self.reg_box = RegBox()
 
@@ -45,6 +45,8 @@ class SubmapHandler(object):
         self.map_pub = rospy.Publisher(map_topic, PointCloud2, queue_size=10)
         self.visualizer = Visualize()
         self.submap_seq = 0
+        self.compute_poses_in_LiDAR = False
+        self.refine_with_ICP = False
 
     def publish_submaps(self, submaps):
         n_submaps = len(submaps)
@@ -121,22 +123,23 @@ class SubmapHandler(object):
         n_submaps = len(submaps)
         if n_submaps == 0 or len(candidates) == 0:
             return
-        all_constraints = []
         self.visualizer.resetConstraintVisualization()
+        submap_msg = SubmapConstraint()
         for i in range(0, n_submaps):
-            submap_msg = self.evaluate_neighbors_for(submaps, candidates, i)
-            if submap_msg is not None:
-                all_constraints.append(submap_msg)
-        return all_constraints
+            submap_msg = self.evaluate_neighbors_for(submaps, candidates, i, submap_msg)
 
-    def evaluate_neighbors_for(self, submaps, candidates, i):
+        submap_msg.header.stamp = rospy.get_rostime()
+        submap_msg.header.seq = self.submap_seq
+        self.submap_seq += 1
+        return submap_msg
+
+    def evaluate_neighbors_for(self, submaps, candidates, i, submap_msg):
         neighbors = candidates[i,:]
         nnz = np.count_nonzero(neighbors)
         if nnz == 0:
-            return None
+            return submap_msg
 
         candidate_a = submaps[i]
-        submap_msg = SubmapConstraint()
         n_neighbors = len(neighbors)
         for j in range(0, n_neighbors):
             if neighbors[j] > 0:
@@ -151,9 +154,6 @@ class SubmapHandler(object):
                                 candidate_a, candidate_b, T_L_a_L_b, submap_msg)
                 self.verify_submap_message(submap_msg)
 
-        submap_msg.header.stamp = rospy.get_rostime()
-        submap_msg.header.seq = self.submap_seq
-        self.submap_seq += 1
         return submap_msg
 
     def compute_alignment(self, candidate_a, candidate_b):
@@ -161,16 +161,24 @@ class SubmapHandler(object):
         points_b = candidate_b.compute_dense_map()
 
         # Compute prior transformation.
-        T_L_G_a = np.linalg.inv(candidate_a.get_pivot_pose_LiDAR())
-        T_G_L_b = candidate_b.get_pivot_pose_LiDAR()
-        T_L_a_L_b = np.matmul(T_L_G_a, T_G_L_b)
-        return T_L_a_L_b
+        T_a_b = None
+        if self.compute_poses_in_LiDAR:
+            T_L_G_a = np.linalg.inv(candidate_a.get_pivot_pose_LiDAR())
+            T_G_L_b = candidate_b.get_pivot_pose_LiDAR()
+            T_a_b = np.matmul(T_L_G_a, T_G_L_b)
+        else:
+            T_B_G_a = np.linalg.inv(candidate_a.get_pivot_pose_IMU())
+            T_G_B_b = candidate_b.get_pivot_pose_IMU()
+            T_a_b = np.matmul(T_B_G_a, T_G_B_b)
+
+        if not self.refine_with_ICP:
+            return T_a_b
 
         # Register the submaps.
-        T = self.reg_box.register(points_a, points_b, T_L_a_L_b)
+        T = self.reg_box.register(points_a, points_b, T_a_b)
         #self.reg_box.draw_registration_result(points_a, points_b, T)
         #self.reg_box.draw_registration_result(points_a, points_b, T_L_a_L_b)
-        if self.reg_box.verify_registration_result(T, T_L_a_L_b):
+        if self.reg_box.verify_registration_result(T, T_a_b):
             return T
         else:
             return T_L_a_L_b
@@ -178,11 +186,11 @@ class SubmapHandler(object):
     def create_and_append_submap_constraint_msg(self, candidate_a, candidate_b, T_L_a_L_b, submap_msg):
         submap_msg.id_from.append(candidate_a.id)
         submap_msg.timestamp_from.append(candidate_a.get_pivot_timestamp_ros())
-        submap_msg.robot_name_from = candidate_a.robot_name
+        submap_msg.robot_name_from.append(candidate_a.robot_name)
 
         submap_msg.id_to.append(candidate_b.id)
         submap_msg.timestamp_to.append(candidate_b.get_pivot_timestamp_ros())
-        submap_msg.robot_name_to = candidate_b.robot_name
+        submap_msg.robot_name_to.append(candidate_b.robot_name)
 
         t = T_L_a_L_b[0:3,3]
         q = Rotation.from_matrix(T_L_a_L_b[0:3,0:3]).as_quat() # x, y, z, w
@@ -217,6 +225,8 @@ class SubmapHandler(object):
         assert(n_id_from == n_id_to)
         assert(n_id_from == n_ts_from)
         assert(n_id_from == n_ts_to)
+        assert(n_id_from == n_robot_name_to)
+        assert(n_id_from == n_robot_name_from)
         assert(n_id_from == n_poses)
 
 if __name__ == "__main__":

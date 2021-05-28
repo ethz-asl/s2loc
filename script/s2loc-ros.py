@@ -84,10 +84,9 @@ class S2LocNode(object):
         submaps = copy.deepcopy(self.ctrl.get_submaps())
         self.mutex.release()
         self.ctrl.publish_all_submaps(submaps)
-        msgs = self.ctrl.compute_submap_constraints(submaps)
-        if msgs is not None:
-            for msg in msgs:
-                self.submap_pub.publish(msg)
+        msg = self.ctrl.compute_submap_constraints(submaps)
+        if msg is not None:
+            self.submap_pub.publish(msg)
 
     def detect_lc(self, request):
         self.is_detecting = True
