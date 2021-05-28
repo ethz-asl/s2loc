@@ -11,7 +11,7 @@ import sensor_msgs.point_cloud2 as pc2
 
 from sensor_msgs.msg import PointCloud2, PointField
 from maplab_msgs.msg import Submap, DenseNode, SubmapConstraint
-from maplab_msgs.srv import PlaceLookup
+from maplab_msgs.srv import PlaceLookup, PlaceLookupResponse
 from std_srvs.srv import Empty
 
 from localization_controller import LocalizationController
@@ -46,7 +46,8 @@ class S2LocNode(object):
 
         # Input place lookup requests
         place_lookup_topic = rospy.get_param("~place_lookup_topic")
-        self.place_lookup = rospy.Service(place_lookup_topic, PlaceLookup, place_lookup_request)
+        self.place_lookup = rospy.Service(place_lookup_topic, PlaceLookup, self.place_lookup_request)
+        rospy.loginfo(f"[S2Loc-Ros] Listening for place lookup requests from {place_lookup_topic}.")
 
         # Submap constraint output
         submap_topic = rospy.get_param("~submap_constraint_topic")
@@ -70,7 +71,7 @@ class S2LocNode(object):
         self.map_builder_service = rospy.Service('s2loc_build_map', Empty, self.build_descriptor_map)
         self.lc_service = rospy.Service('s2loc_detect', Empty, self.detect_lc)
         self.clear_map_service = rospy.Service('s2loc_clear_map', Empty, self.clear_descriptor_map)
-        print("Listening for submap messages.")
+        print("[S2Loc-Ros] Listening for submap messages.")
 
 
     def submap_callback(self, submap_msg):
@@ -79,16 +80,20 @@ class S2LocNode(object):
         submap = SubmapModel()
         submap.construct_data(submap_msg)
         submap.compute_dense_map()
-        print(f'Received submap from {submap_msg.robot_name} with {len(submap_msg.nodes)} nodes and id {submap_msg.id}.')
+        print(f'[S2Loc-Ros] Received submap from {submap_msg.robot_name} with {len(submap_msg.nodes)} nodes and id {submap_msg.id}.')
         self.mutex.acquire()
         self.ctrl.add_submap(submap)
         self.mutex.release()
 
     def place_lookup_request(self, place_lookup_req):
         rospy.loginfo(f"[S2Loc-Ros] Received a place lookup request with {place_lookup_req.n_neighbors} neighbors and threshold of {place_lookup_req.confidence_threshold}.")
+        resp = PlaceLookupResponse()
+        resp.mission_ids_a.append("foo")
+        resp.mission_ids_b.append("bar")
+        return resp
 
     def update(self):
-        rospy.loginfo("Checking for updates.")
+        rospy.loginfo("[S2Loc-Ros] Checking for updates.")
         self.mutex.acquire()
         submaps = copy.deepcopy(self.ctrl.get_submaps())
         self.mutex.release()
@@ -111,7 +116,7 @@ class S2LocNode(object):
 
 if __name__ == "__main__":
     rospy.init_node('S2LocNode')
-    print("=== Running S2Loc Node ====================")
+    print("=== Running S2Loc Node ==========================================")
 
     node = S2LocNode()
     while not rospy.is_shutdown():

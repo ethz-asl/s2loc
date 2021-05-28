@@ -37,9 +37,9 @@ class MapBuildingController(BaseController):
 
     def compute_submap_constraints(self, submaps):
         n_submaps = len(submaps)
-        print(f"Computing constraints for {n_submaps} submaps.")
         if n_submaps == 0:
             return None
+        print(f"Computing constraints for {n_submaps} submaps.")
         return self.alignment_engine.compute_constraints(submaps)
 
     def publish_all_submaps(self, submaps):
