@@ -18,7 +18,6 @@ S2Loc was written using __PyTorch__ ([http://pytorch.org/](http://pytorch.org/))
 
 Submodule references to these repositories can be found in the `lib` folder
 
-
 ## Usage
 
 Clone this repository:
@@ -43,7 +42,7 @@ path_to_dataset/
     missions.csv
 ```
 Images need to be projected separately, whereas pointclouds will be projected by the training set provider.
-Missions are hash ids that are used to separate test and training places. 
+Missions are hash ids that are used to separate test and training places.
 __An example training set will be provided soon.__
 
 ## Reference
