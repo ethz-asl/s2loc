@@ -1,5 +1,7 @@
 # Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems
 
+![S2_Projections](https://user-images.githubusercontent.com/1336474/119963033-ee192100-bfa7-11eb-97e7-de71aa247fdc.png)
+
 ## Overview
 
 ## Installation
@@ -25,6 +27,13 @@ To train a new model the use `train.py`.
 
 ## Reference
 
+Our paper is available at 
+
+*Bernreiter, Lukas, Lionel Ott, Juan Nieto, Roland Siegwart, and Cesar Cadena. 
+"Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems." 
+2021 International Conference on Robotics and Automation (ICRA), vol. 2021-May, IEEE.* [[ArXiv](https://arxiv.org/abs/2104.10067)]
+
+BibTex:
 ```
 @INPROCEEDINGS{Bernreiter2021S2Loc,
  author={Bernreiter Lukas and Lionel Ott and Juan Nieto and Roland Siegwart and Cesar Cadena.},

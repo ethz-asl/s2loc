@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+  <!-- Config file -->
+  <arg name="config_file" default="$(find s2loc)/config/default.yaml"/>
+
+  <!-- Node name -->
+  <arg name="node_name" default="s2loc"/>
+
+  <node name="$(arg node_name)" pkg="s2loc" type="s2loc-ros.py" output="screen" respawn="true">
+    <rosparam command="load" file="$(arg config_file)"/>
+  </node>
+
+</launch>
