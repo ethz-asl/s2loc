@@ -17,6 +17,7 @@ class SubmapModel(object):
         self.ts = []
         self.seq_nr = 0
         self.robot_name = ""
+        self.mission_id = ""
         self.id = 0
         self.poses = []
         self.pointclouds = []
@@ -51,14 +52,16 @@ class SubmapModel(object):
         ts = msg.header.stamp
         seq = msg.header.seq
         robot_name = msg.robot_name
+        mission_id = msg.mission_id
         id = msg.id
 
-        self.set_submap_information(ts, seq, robot_name, id)
+        self.set_submap_information(ts, seq, robot_name, mission_id, id)
 
-    def set_submap_information(self, ts, seq_nr, robot_name, id):
+    def set_submap_information(self, ts, seq_nr, robot_name, mission_id, id):
         self.submap_ts = ts
         self.seq_nr = seq_nr
         self.robot_name = robot_name
+        self.mission_id = mission_id
         self.id = id
 
     def compute_dense_map(self):

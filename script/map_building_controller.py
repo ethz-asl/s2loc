@@ -48,11 +48,15 @@ class MapBuildingController(BaseController):
     # --- SUBMAP DESCRIPTORS --------------------------------------------------
 
     def build_descriptor_map(self):
-        print("Building all descriptors...")
+        print("Building feature...")
+        eval_set = EvaluationSet(submaps, self.bw)
+
+        '''
         self.descriptors = self.describe_all_point_clouds(self.submaps)
         if self.export_map_folder is not "":
             self.export_descriptors_to_folder(
                 self.export_map_folder, descriptors)
+        '''
 
     def find_loop_closures(self):
         if self.descriptors is None:

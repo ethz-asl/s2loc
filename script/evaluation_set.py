@@ -10,11 +10,9 @@ from sphere import Sphere
 from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
 
-
 def progresser(submap, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
-    sample_sphere = Sphere(sample)
+    sample_sphere = Sphere(submap)
     return sample_sphere.sampleUsingGrid(grid)
-
 
 class EvaluationSet(torch.utils.data.Dataset):
     def __init__(self, clouds, bw=100):
@@ -30,10 +28,12 @@ class EvaluationSet(torch.utils.data.Dataset):
     def __genAllFeatures(self, clouds, bw):
         n_ds = len(clouds)
         grid = DHGrid.CreateGrid(bw)
-        print(f"Generating spheres for {len(clouds)} submaps")
-
-        clouds = generate
+        print(f"[EvaluationSet] Generating spheres for {len(clouds)} submaps using a bandwidth of {bw}.")
 
         features = process_map(
-            partial(progresser, grid=grid), clouds, max_workers=32)
+            partial(progresser, grid=grid), clouds, max_workers=8)
         return features
+
+    def save_features_to_disk(self, filename):
+        np.save(filename, self.features)
+        print(f"[EvaluationSet] Wrote computed features to {filename}")
