@@ -4,6 +4,10 @@
 
 ## Overview
 
+In the context of robotics, place recognition is a fundamental problem for autonomous systems. It yields a estimated position of a robot in a prior map given the current observations.
+We propose an end-to-end multi-modal approach that directly operates on camera images and LiDAR scans without the necessity of a feature extraction.
+All modalities are projected onto a hypersphere and given as input to a spherical CNN that learns a unique embedding optimized for distinguishing between different places.
+
 ## Installation
 
 
@@ -24,13 +28,30 @@ git clone git@github.com:ethz-asl/s2loc.git --recursive
 
 To train a new model the use `train.py`.
 
+### Data Format
+```
+path_to_dataset/
+    training_anchor_pointclouds/
+    training_positive_pointclouds/
+    training_negative_pointclouds/
+    training_anchor_sph_images/
+    training_positive_sph_images/
+    training_negative_sph_images/
+    anchor-poses.csv
+    positive-poses.csv
+    negative-poses.csv
+    missions.csv
+```
+Images need to be projected separately, whereas pointclouds will be projected by the training set provider.
+Missions are hash ids that are used to separate test and training places. 
+__An example training set will be provided soon.__
 
 ## Reference
 
-Our paper is available at 
+Our paper is available at
 
-*Bernreiter, Lukas, Lionel Ott, Juan Nieto, Roland Siegwart, and Cesar Cadena. 
-"Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems." 
+*Bernreiter, Lukas, Lionel Ott, Juan Nieto, Roland Siegwart, and Cesar Cadena.
+"Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems."
 2021 International Conference on Robotics and Automation (ICRA), vol. 2021-May, IEEE.* [[ArXiv](https://arxiv.org/abs/2104.10067)]
 
 BibTex:
