@@ -26,6 +26,8 @@ class SubmapModel(object):
              [0, 1, 0, 0.037340],
              [0, 0, 1, 0.063319],
              [0, 0, 0, 1]])
+        self.is_dense_map_computed = False
+        self.dense_map = np.array([])
 
     def construct_data(self, submap_msg):
         n_data = len(submap_msg.nodes)
@@ -63,6 +65,12 @@ class SubmapModel(object):
         self.robot_name = robot_name
         self.mission_id = mission_id
         self.id = id
+
+    def get_dense_map(self):
+        if is_dense_map_computed:
+            return self.dense_map
+        self.dense_map = self.compute_dense_map()
+        return self.dense_map
 
     def compute_dense_map(self):
         n_poses = len(self.poses)

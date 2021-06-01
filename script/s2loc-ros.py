@@ -23,7 +23,7 @@ class S2LocNode(object):
     def __init__(self):
         # General settings.
         self.ctrl = None
-        mode = rospy.get_param("~mode")
+        self.mode = rospy.get_param("~mode")
         self.rate = rospy.Rate(0.1)
 
         # Network specific settings.
@@ -32,12 +32,12 @@ class S2LocNode(object):
         descriptor_size = rospy.get_param("~descriptor_size")
 
         # Configure for the selected mode.
-        if mode == "localization":
+        if self.mode == "localization":
             self.setup_localization_mode()
-        elif mode == "map-building":
+        elif self.mode == "map-building":
             self.setup_map_building_mode(bw, net, descriptor_size)
         else:
-            print("ERROR: no valid mode specified: ", mode)
+            print("ERROR: no valid mode specified: ", self.mode)
             sys.exit(-1)
 
         # Input pointclouds
@@ -50,8 +50,10 @@ class S2LocNode(object):
         rospy.loginfo(f"[S2Loc-Ros] Listening for place lookup requests from {place_lookup_topic}.")
 
         # Submap constraint output
-        submap_topic = rospy.get_param("~submap_constraint_topic")
-        self.submap_pub = rospy.Publisher(submap_topic, SubmapConstraint, queue_size=10)
+        self.enable_submap_constraints = rospy.get_param("~enable_submap_constraints")
+        if self.enable_submap_constraints:
+            submap_topic = rospy.get_param("~submap_constraint_topic")
+            self.submap_pub = rospy.Publisher(submap_topic, SubmapConstraint, queue_size=10)
 
         self.mutex = Lock()
 
@@ -87,12 +89,19 @@ class S2LocNode(object):
 
     def place_lookup_request(self, place_lookup_req):
         rospy.loginfo(f"[S2Loc-Ros] Received a place lookup request with {place_lookup_req.n_neighbors} neighbors and threshold of {place_lookup_req.confidence_threshold}.")
+
         resp = PlaceLookupResponse()
-        resp.mission_ids_a.append("foo")
-        resp.mission_ids_b.append("bar")
+        if self.mode == "localization":
+            rospy.logerr("Localization mode not yet implemented.")
+        elif self.mode == "map-building":
+            self.ctrl.build_descriptor_map()
+
         return resp
 
     def update(self):
+        if not self.enable_submap_constraints:
+            return
+
         rospy.loginfo("[S2Loc-Ros] Checking for updates.")
         self.mutex.acquire()
         submaps = copy.deepcopy(self.ctrl.get_submaps())
