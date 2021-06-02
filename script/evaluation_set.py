@@ -11,9 +11,8 @@ from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
 
 def progresser(submap, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
-    dm = submap.get_dense_map()
-    np.save('/home/berlukas/Documents/workspace/phaser_ws/src/s2loc/script/playground/foo.npy', dm)
-    sample_sphere = Sphere(dm)
+    dense_map = submap.get_dense_map()
+    sample_sphere = Sphere(dense_map)
     return sample_sphere.sampleUsingGrid(grid)
 
 class EvaluationSet(torch.utils.data.Dataset):

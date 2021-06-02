@@ -50,7 +50,6 @@ class MapBuildingController(BaseController):
     def build_descriptor_map(self):
         print("Building spherical projections...")
         eval_set = EvaluationSet(self.submaps, self.bw)
-        eval_set.save_features_to_disk('/home/berlukas/Documents/workspace/phaser_ws/src/s2loc/script/test_features.npy')
 
         '''
         self.descriptors = self.describe_all_point_clouds(self.submaps)
