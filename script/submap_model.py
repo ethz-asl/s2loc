@@ -67,7 +67,7 @@ class SubmapModel(object):
         self.id = id
 
     def get_dense_map(self):
-        if is_dense_map_computed:
+        if self.is_dense_map_computed:
             return self.dense_map
         self.dense_map = self.compute_dense_map()
         return self.dense_map
