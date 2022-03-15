@@ -43,7 +43,7 @@ path_to_dataset/
 ```
 Images need to be projected separately, whereas pointclouds will be projected by the training set provider.
 Missions are hash ids that are used to separate test and training places.
-__An example training set will be provided soon.__
+An example training set is provided in the `share/` folder.
 
 ## Reference
 
