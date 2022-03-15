@@ -49,19 +49,16 @@ __An example training set will be provided soon.__
 
 Our paper is available at
 
-*Bernreiter, Lukas, Lionel Ott, Juan Nieto, Roland Siegwart, and Cesar Cadena.
-"Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems."
-2021 International Conference on Robotics and Automation (ICRA), vol. 2021-May, IEEE.* [[ArXiv](https://arxiv.org/abs/2104.10067)]
+*Bernreiter, Lukas, Lionel Ott, Juan Nieto, Roland Siegwart, and Cesar Cadena. "Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems." In 2021 IEEE International Conference on Robotics and Automation (ICRA), pp. 1743-1750. IEEE, 2021.* [[Link](https://ieeexplore.ieee.org/abstract/document/9561078)] [[ArXiv](https://arxiv.org/abs/2104.10067)]
 
 BibTex:
 ```
-@INPROCEEDINGS{Bernreiter2021S2Loc,
- author={Bernreiter Lukas and Lionel Ott and Juan Nieto and Roland Siegwart and Cesar Cadena.},
- booktitle={2021 International Conference on Robotics and Automation (ICRA)},
- title={Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems},
- year={2021},
- volume={},
- number={},
- pages={},
- doi={}}
+@inproceedings{bernreiter2021spherical,
+  title={Spherical Multi-Modal Place Recognition for Heterogeneous Sensor Systems},
+  author={Bernreiter, Lukas and Ott, Lionel and Nieto, Juan and Siegwart, Roland and Cadena, Cesar},
+  booktitle={2021 IEEE International Conference on Robotics and Automation (ICRA)},
+  pages={1743--1750},
+  year={2021},
+  organization={IEEE}
+}
 ```
