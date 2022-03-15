@@ -48,8 +48,8 @@ class MapBuildingController(BaseController):
     # --- SUBMAP DESCRIPTORS --------------------------------------------------
 
     def build_descriptor_map(self):
-        print("Building feature...")
-        eval_set = EvaluationSet(submaps, self.bw)
+        print("Building spherical projections...")
+        eval_set = EvaluationSet(self.submaps, self.bw)
 
         '''
         self.descriptors = self.describe_all_point_clouds(self.submaps)

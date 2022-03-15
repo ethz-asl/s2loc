@@ -11,7 +11,8 @@ from tqdm.auto import tqdm, trange
 from tqdm.contrib.concurrent import process_map, thread_map
 
 def progresser(submap, grid, auto_position=True, write_safe=False, blocking=True, progress=False):
-    sample_sphere = Sphere(submap)
+    dense_map = submap.get_dense_map()
+    sample_sphere = Sphere(dense_map)
     return sample_sphere.sampleUsingGrid(grid)
 
 class EvaluationSet(torch.utils.data.Dataset):
@@ -29,9 +30,10 @@ class EvaluationSet(torch.utils.data.Dataset):
         n_ds = len(clouds)
         grid = DHGrid.CreateGrid(bw)
         print(f"[EvaluationSet] Generating spheres for {len(clouds)} submaps using a bandwidth of {bw}.")
+        print(f'cloud is {clouds[0].get_dense_map().shape}')
 
         features = process_map(
-            partial(progresser, grid=grid), clouds, max_workers=8)
+            partial(progresser, grid=grid), clouds.values(), max_workers=8)
         return features
 
     def save_features_to_disk(self, filename):

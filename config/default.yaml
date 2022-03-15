@@ -1,17 +1,18 @@
 # General setup.
-mode:                    map-building
-verbosity:               3
-export_map_folder:       ""
-pc_topic:                "/maplab_server/sparse_graph/submap"
-place_lookup_topic:      "/maplab_server/place_lookup"
+mode:                      map-building
+verbosity:                 3
+export_map_folder:         ""
+pc_topic:                  "/maplab_server/sparse_graph/submap"
+place_lookup_topic:        "/maplab_server/place_lookup"
 
 # Specific for localization mode
-map_folder:              ""
+map_folder:                ""
 
 # Submap constraints
-submap_constraint_topic: "s2loc/submaps"
+enable_submap_constraints: false
+submap_constraint_topic:   "s2loc/submaps"
 
 # Network specific setup.
-net:                     ""
-bw:                      100
-descriptor_size:         128
+net:                       ""
+bw:                        100
+descriptor_size:           128

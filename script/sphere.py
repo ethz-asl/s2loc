@@ -7,10 +7,28 @@ import sys
 from tqdm.auto import tqdm
 
 class Sphere:
-    def __init__(self, point_cloud):
-        self.point_cloud = point_cloud
-        (self.sphere, self.ranges) = self.__projectPointCloudOnSphere(point_cloud)
-        self.intensity = point_cloud[:,3]
+    def __init__(self, point_cloud=None, bw=None, features=None):
+        if point_cloud is not None:
+            self.point_cloud = point_cloud
+            (self.sphere, self.ranges) = self.__projectPointCloudOnSphere(point_cloud)
+            self.intensity = point_cloud[:,3]
+        elif bw is not None and features is not None:
+            self.constructFromFeatures(bw, features)
+
+    def constructFromFeatures(self, bw, features):
+        self.point_cloud = None
+        _, self.sphere = DHGrid.CreateGrid(bw)
+        n_grid = 2 * bw
+        n_points = n_grid*n_grid
+
+        self.ranges = np.empty([n_points, 1])
+        self.intensity = np.empty([n_points, 1])
+        cur_idx = 0
+        for i in range(n_grid):
+            for j in range(n_grid):
+                self.ranges[cur_idx] = features[0, i, j]
+                self.intensity[cur_idx] = features[1, i, j]
+                cur_idx = cur_idx + 1
 
     def getProjectedInCartesian(self):
         return self.__convertSphericalToEuclidean(self.sphere)
@@ -24,17 +42,26 @@ class Sphere:
         pcd_tree = o3d.geometry.KDTreeFlann(pcd)
 
         kNearestNeighbors = 1
-        features = np.zeros((2, grid.shape[1], grid.shape[2]))
+#         features = np.zeros((2, grid.shape[1], grid.shape[2]))
+        features = np.ones((2, grid.shape[1], grid.shape[2])) * (-1)
+        dist_threshold = 0.3
         for i in range(grid.shape[1]):
             for j in range(grid.shape[2]):
-                [k, nn_idx, _] = pcd_tree.search_knn_vector_3d(cart_grid[:, i, j], kNearestNeighbors)
+                [k, nn_idx, nn_dist] = pcd_tree.search_knn_vector_3d(cart_grid[:, i, j], kNearestNeighbors)
 
                 # TODO(lbern): Average over all neighbors
-                for cur_idx in nn_idx:
+                for k in range(kNearestNeighbors):
+                    cur_idx = nn_idx[k]
+                    cur_dist = np.absolute(nn_dist[k])
+                    if (cur_dist > 0.001):
+                        continue
+
                     range_value = self.ranges[cur_idx]
-                    range_value = range_value if not np.isnan(range_value) else 0
                     intensity = self.intensity[cur_idx]
-                    intensity = intensity if not np.isnan(intensity) else 0
+
+                    range_value = range_value if not np.isnan(range_value) else -1
+                    intensity = intensity if not np.isnan(intensity) else -1
+
                     features[0, i, j] = range_value
                     features[1, i, j] = intensity
 
